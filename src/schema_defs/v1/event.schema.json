@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/event.schema.json",
+  "title": "FlowRun Event",
+  "description": "Schema for all FlowRun events written to events.jsonl",
+  "type": "object",
+  "required": ["event_id", "event_type", "event_version", "timestamp", "run_id", "trace_id", "span_id", "correlation_id"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "FLOW_CREATED", "FLOW_UPDATED",
+        "JOB_REGISTERED", "JOB_DELETED",
+        "RUN_CREATED", "RUN_STARTED", "RUN_FINISHED", "RUN_REPLACED",
+        "STEP_STARTED", "STEP_FINISHED", "STEP_FAILED",
+        "ATTEMPT_STARTED", "ATTEMPT_FAILED",
+        "PLUGIN_STARTED", "PLUGIN_FINISHED",
+        "ARTIFACT_CREATED",
+        "LOCK_ACQUIRED", "LOCK_RELEASED",
+        "STATE_CHANGED",
+        "MANUAL_RESTART",
+        "DAEMON_STARTED", "DAEMON_STOPPED",
+        "PROCESS_STARTED", "PROCESS_KILLED", "PROCESS_TREE_KILLED",
+        "RETENTION_STARTED", "RETENTION_FINISHED"
+      ]
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Incremented on breaking payload changes. event_type is immutable."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "trace_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "OpenTelemetry-compatible: constant across the full run"
+    },
+    "span_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "OpenTelemetry-compatible: unique per local operation"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Business-level grouping key"
+    },
+    "step_id": {
+      "type": "string",
+      "description": "Present on step/attempt/plugin events"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Present on attempt events"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-type-specific data. Schema varies by event_type and event_version."
+    }
+  }
+}

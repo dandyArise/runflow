@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/plugin-output.schema.json",
+  "title": "FlowRun Plugin Output (stdout)",
+  "description": "Contract v1 — JSON written to stdout by the plugin process. Logs go to stderr only.",
+  "type": "object",
+  "required": ["contract_version", "status", "exit_code"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "FAILED", "RETRYABLE_FAILED", "TIMEOUT", "CANCELLED", "CONTRACT_ERROR"]
+    },
+    "exit_code": {
+      "type": "integer",
+      "description": "0=SUCCESS 10=INVALID_INPUT 20=FAILED 21=RETRYABLE_FAILED 30=TIMEOUT 40=CANCELLED 50=CONTRACT_ERROR"
+    },
+    "message":  { "type": "string" },
+    "outputs":  { "type": "object", "description": "Plugin-defined output values" },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code":    { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

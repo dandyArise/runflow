@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/snapshot.schema.json",
+  "title": "FlowRun Snapshot",
+  "description": "Schema for .flow/snapshots/run-uuid.snapshot — periodic state checkpoint",
+  "type": "object",
+  "required": ["snapshot_version", "run_id", "last_event_id", "created_at", "state"],
+  "additionalProperties": false,
+  "properties": {
+    "snapshot_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Incremented on breaking snapshot format changes"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "last_event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the last event included in this snapshot. Replay starts from the next event."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "state": {
+      "type": "object",
+      "description": "Full serialized run state at snapshot point",
+      "required": ["run_status", "steps"],
+      "properties": {
+        "run_status": {
+          "type": "string",
+          "enum": ["CREATED","QUEUED","SCHEDULED","RUNNING","WAITING","PAUSED","BLOCKED","RETRYING","SUCCESS","FAILED","TIMEOUT","CANCELLED","SKIPPED"]
+        },
+        "steps": {
+          "type": "object",
+          "description": "Map of step_id to step state",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["status", "attempt"],
+            "properties": {
+              "status":  { "type": "string" },
+              "attempt": { "type": "integer", "minimum": 0 },
+              "outputs": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

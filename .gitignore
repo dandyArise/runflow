@@ -1,0 +1,13 @@
+/target/
+/.flow/
+/.repolens/
+/flowrun-codex-ready/
+AGENTS.md
+AGENTS.md.candidate
+**/AGENTS.md
+**/AGENTS.md.candidate
+*.pdb
+*.log
+.env
+.env.*
+!.env.example

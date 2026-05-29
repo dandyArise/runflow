@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/manifest.schema.json",
+  "title": "FlowRun Run Manifest",
+  "description": "Schema for .flow/runs/<run_id>/manifest.json — produced at run completion",
+  "type": "object",
+  "required": ["workflow_version", "schema_version", "run_id", "job_id", "started_at", "ended_at", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "workflow_version": { "type": "string" },
+    "schema_version":   { "type": "string" },
+    "run_id":    { "type": "string", "format": "uuid" },
+    "job_id":    { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "ended_at":   { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "FAILED", "CANCELLED", "TIMEOUT"]
+    },
+    "failure_policy": { "type": "string", "enum": ["stop", "continue"] },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step_id", "path", "size_bytes"],
+        "additionalProperties": false,
+        "properties": {
+          "step_id":    { "type": "string" },
+          "path":       { "type": "string" },
+          "size_bytes": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workflow_duration_ms": { "type": "integer", "minimum": 0 },
+        "retry_count":          { "type": "integer", "minimum": 0 },
+        "step_count":           { "type": "integer", "minimum": 0 },
+        "failed_step_count":    { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

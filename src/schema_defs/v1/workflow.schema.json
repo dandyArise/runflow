@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/workflow.schema.json",
+  "title": "FlowRun Workflow",
+  "description": "Schema for FlowRun workflow YAML files (parsed to JSON for validation)",
+  "type": "object",
+  "required": ["id", "version", "schema_version", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "description": "Unique job identifier, kebab-case"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Workflow definition version"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "FlowRun schema version for migration"
+    },
+    "schedule": {
+      "type": "string",
+      "description": "Cron expression (e.g. '0 1 * * *')"
+    },
+    "failure_policy": {
+      "type": "string",
+      "enum": ["stop", "continue"],
+      "default": "stop"
+    },
+    "concurrency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy"],
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["allow", "forbid", "queue", "replace"]
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu":        { "type": "integer", "minimum": 1 },
+        "memory":     { "type": "string", "pattern": "^[0-9]+(MB|GB)$" },
+        "stdout_max": { "type": "string", "pattern": "^[0-9]+(MB|GB)$" },
+        "stderr_max": { "type": "string", "pattern": "^[0-9]+(MB|GB)$" }
+      }
+    },
+    "locks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["from_env"],
+        "properties": {
+          "from_env": { "type": "string" }
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_failure": { "$ref": "#/$defs/notification_target" },
+        "on_success": { "$ref": "#/$defs/notification_target" }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runs":            { "type": "integer", "minimum": 1 },
+        "logs_days":       { "type": "integer", "minimum": 1 },
+        "metrics_days":    { "type": "integer", "minimum": 1 },
+        "snapshots_days":  { "type": "integer", "minimum": 1 }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/test_case" }
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id":          { "type": "string", "pattern": "^[a-z0-9][a-z0-9-_]*$" },
+        "type":        { "type": "string", "enum": ["command", "plugin", "sleep", "wait_until"] },
+        "depends_on":  { "type": "array", "items": { "type": "string" } },
+        "run":         { "type": "string" },
+        "env":         { "type": "object", "additionalProperties": { "type": "string" } },
+        "timeout":     { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "plugin_id":   { "type": "string" },
+        "input":       { "type": "object" },
+        "duration":    { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "command":     { "type": "string" },
+        "interval":    { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "retry":       { "$ref": "#/$defs/retry_policy" },
+        "output":      { "$ref": "#/$defs/output_capture" },
+        "artifacts":   { "type": "array", "items": { "$ref": "#/$defs/artifact_decl" } },
+        "on_success":  { "$ref": "#/$defs/hook" },
+        "on_failure":  { "$ref": "#/$defs/hook" },
+        "on_timeout":  { "$ref": "#/$defs/hook" },
+        "finally":     { "$ref": "#/$defs/hook" }
+      }
+    },
+    "retry_policy": {
+      "type": "object",
+      "required": ["attempts"],
+      "additionalProperties": false,
+      "properties": {
+        "attempts":      { "type": "integer", "minimum": 1 },
+        "delay":         { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "strategy":      { "type": "string", "enum": ["fixed", "exponential"] },
+        "initial_delay": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "max_delay":     { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" }
+      }
+    },
+    "output_capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capture_stdout": { "type": "boolean" },
+        "capture_stderr": { "type": "boolean" }
+      }
+    },
+    "artifact_decl": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path":     { "type": "string" },
+        "required": { "type": "boolean", "default": true }
+      }
+    },
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": { "type": "string" }
+      }
+    },
+    "notification_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email":   { "type": "array", "items": { "type": "string", "format": "email" } },
+        "webhook": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url"],
+            "properties": {
+              "url":     { "type": "string", "format": "uri" },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "test_case": {
+      "type": "object",
+      "required": ["name", "run", "expect"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "run":  { "type": "string" },
+        "env":  { "type": "object", "additionalProperties": { "type": "string" } },
+        "expect": {
+          "type": "object",
+          "required": ["state"],
+          "additionalProperties": false,
+          "properties": {
+            "state":            { "type": "string", "enum": ["SUCCESS","FAILED","CANCELLED","TIMEOUT","SKIPPED"] },
+            "artifact_exists":  { "type": "string" },
+            "step_failed":      { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

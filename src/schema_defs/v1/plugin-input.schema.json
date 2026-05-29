@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/plugin-input.schema.json",
+  "title": "FlowRun Plugin Input (stdin)",
+  "description": "Contract v1 — JSON written to plugin stdin by the Plugin Engine",
+  "type": "object",
+  "required": ["contract_version", "plugin", "flow", "input", "env", "paths", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "plugin": {
+      "type": "object",
+      "required": ["id", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id":      { "type": "string" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "required": ["run_id"],
+      "additionalProperties": false,
+      "properties": {
+        "run_id":  { "type": "string", "format": "uuid" },
+        "step_id": { "type": "string" },
+        "job_id":  { "type": "string" }
+      }
+    },
+    "input":  { "type": "object", "description": "Plugin-defined input schema" },
+    "env":    { "type": "object", "additionalProperties": { "type": "string" } },
+    "paths": {
+      "type": "object",
+      "required": ["work_dir"],
+      "additionalProperties": false,
+      "properties": {
+        "work_dir": { "type": "string" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": ["timeout_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "timeout_ms": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
