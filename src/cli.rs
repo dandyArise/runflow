@@ -1,24 +1,28 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
+use tokio::time::{Duration, sleep};
 use uuid::Uuid;
 
-use crate::dag::{WorkflowDefinition, WorkflowGraph};
+use crate::daemon::{self, ActiveProcess, DaemonState, DaemonStatus, RunRequest};
+use crate::dag::{StepDefinition, StepType, WorkflowDefinition, WorkflowGraph};
 use crate::engine::{RetryPolicy, WorkflowEngine};
 use crate::events::{EventStore, EventType, FlowEvent};
 use crate::manifest::write_run_manifest;
 use crate::packages::{
     build_package_from_workflow_file, read_package_or_legacy_workflow, write_package,
 };
-use crate::plugins::{PluginManifest, PluginRuntime, parse_manifest};
+use crate::plugins::{PluginInput, PluginManifest, PluginRuntime, parse_manifest};
 use crate::retention::{RetentionPolicy, run_retention};
 use crate::schemas;
 use crate::state::{RunState, StateChangedPayload};
-use crate::workspace::WorkspaceIsolation;
+use crate::supervisor::{CommandLimits, ProcessSupervisor};
+use crate::workspace::{RunWorkspace, WorkspaceIsolation};
 
 #[derive(Debug, Parser)]
 #[command(name = "flow")]
@@ -137,6 +141,9 @@ enum DaemonCommand {
     Start,
     Status,
     Stop,
+    Restart,
+    #[command(hide = true)]
+    Serve,
 }
 
 #[derive(Debug, Subcommand)]
@@ -156,7 +163,7 @@ impl Cli {
         let root = self.root;
         match self.command.unwrap_or(Command::Version) {
             Command::Job { command } => run_job_command(&root, command).await,
-            Command::Run { command } => run_run_command(&root, command),
+            Command::Run { command } => run_run_command(&root, command).await,
             Command::Step { command } => run_step_command(&root, command),
             Command::Plugin { command } => run_plugin_command(&root, command).await,
             Command::Package { command } => run_package_command(&root, command),
@@ -167,7 +174,7 @@ impl Cli {
                 println!("migration not required: {}", workflow.display());
                 Ok(())
             }
-            Command::Daemon { command } => run_daemon_command(&root, command),
+            Command::Daemon { command } => run_daemon_command(&root, command).await,
             Command::Retention { command } => run_retention_command(&root, command),
             Command::Version => {
                 println!("runflow {}", env!("CARGO_PKG_VERSION"));
@@ -204,24 +211,73 @@ async fn run_job_command(root: &Path, command: JobCommand) -> Result<()> {
 }
 
 async fn run_job(root: &Path, job_id: &str) -> Result<()> {
-    let source = read_job_source(root, job_id)?;
-    let workflow = WorkflowDefinition::from_yaml(&source)?;
-    let graph = WorkflowGraph::build(&workflow)?;
-    let run_id = Uuid::new_v4();
-    let started_at = Utc::now();
-    let event_store = EventStore::new(root);
-    let workspace = WorkspaceIsolation::new(root).create(run_id)?;
+    if daemon::is_daemon_running(root) {
+        let run_id = enqueue_job_run(root, job_id)?;
+        println!("{run_id}");
+        return Ok(());
+    }
 
+    let run_id = Uuid::new_v4();
+    run_job_direct(root, job_id, run_id, RunState::Created, true, false).await?;
+    println!("{run_id}");
+    Ok(())
+}
+
+fn enqueue_job_run(root: &Path, job_id: &str) -> Result<Uuid> {
+    read_job_source(root, job_id)?;
+    let run_id = Uuid::new_v4();
+    let event_store = EventStore::new(root);
     event_store.append(&FlowEvent::new(
         EventType::RunCreated,
         run_id,
-        json!({ "job_id": job_id }),
+        json!({ "job_id": job_id, "source": "daemon_queue" }),
     ))?;
     event_store.append(&FlowEvent::new(
         EventType::StateChanged,
         run_id,
         json!(StateChangedPayload {
             from: RunState::Created,
+            to: RunState::Queued,
+        }),
+    ))?;
+    daemon::enqueue_run(
+        root,
+        &RunRequest {
+            run_id,
+            job_id: job_id.to_owned(),
+            enqueued_at: Utc::now(),
+        },
+    )?;
+    Ok(run_id)
+}
+
+async fn run_job_direct(
+    root: &Path,
+    job_id: &str,
+    run_id: Uuid,
+    from_state: RunState,
+    create_event: bool,
+    daemon_mode: bool,
+) -> Result<RunState> {
+    let source = read_job_source(root, job_id)?;
+    let workflow = WorkflowDefinition::from_yaml(&source)?;
+    let graph = WorkflowGraph::build(&workflow)?;
+    let started_at = Utc::now();
+    let event_store = EventStore::new(root);
+    let workspace = WorkspaceIsolation::new(root).create(run_id)?;
+
+    if create_event {
+        event_store.append(&FlowEvent::new(
+            EventType::RunCreated,
+            run_id,
+            json!({ "job_id": job_id }),
+        ))?;
+    }
+    event_store.append(&FlowEvent::new(
+        EventType::StateChanged,
+        run_id,
+        json!(StateChangedPayload {
+            from: from_state,
             to: RunState::Running,
         }),
     ))?;
@@ -235,17 +291,23 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
     let mut failed_step_count = 0;
     let ordered = graph.ordered_steps()?;
     for step_id in ordered {
+        if daemon_mode && daemon::cancel_requested(root, run_id) {
+            status = RunState::Cancelled;
+            break;
+        }
         let step = workflow
             .steps
             .iter()
             .find(|step| step.id == step_id)
             .context("ordered step missing from workflow")?;
-        match WorkflowEngine::execute_step_with_events(step, &workspace, RetryPolicy::default())
-            .await
-        {
+        match execute_step_for_run(root, run_id, step, &workspace, daemon_mode).await {
             Ok((_outcome, events)) => {
                 for event in events {
                     event_store.append(&event)?;
+                }
+                if daemon_mode && daemon::cancel_requested(root, run_id) {
+                    status = RunState::Cancelled;
+                    break;
                 }
                 event_store.append(&FlowEvent::new(
                     EventType::StepFinished,
@@ -254,6 +316,10 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
                 ))?;
             }
             Err(error) => {
+                if daemon_mode && daemon::cancel_requested(root, run_id) {
+                    status = RunState::Cancelled;
+                    break;
+                }
                 event_store.append(&FlowEvent::new(
                     EventType::StepFailed,
                     run_id,
@@ -289,11 +355,54 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
         failed_step_count,
     )?;
 
-    println!("{run_id}");
-    Ok(())
+    if daemon_mode {
+        daemon::clear_cancel(root, run_id)?;
+    }
+    Ok(status)
 }
 
-fn run_run_command(root: &Path, command: RunCommand) -> Result<()> {
+async fn execute_step_for_run(
+    root: &Path,
+    run_id: Uuid,
+    step: &StepDefinition,
+    workspace: &RunWorkspace,
+    daemon_mode: bool,
+) -> Result<(crate::engine::StepOutcome, Vec<FlowEvent>)> {
+    if daemon_mode && step.step_type == StepType::Command {
+        let command = step.run.as_deref().context("command step missing run")?;
+        let (process, started) = ProcessSupervisor::spawn_managed(
+            command,
+            &workspace.work_dir,
+            run_id,
+            Some(step.id.clone()),
+        )?;
+        daemon::write_active_process(
+            root,
+            &ActiveProcess {
+                run_id,
+                step_id: step.id.clone(),
+                pid: process.pid(),
+                command: command.to_owned(),
+                started_at: Utc::now(),
+            },
+        )?;
+        let output = process.wait(CommandLimits::default()).await;
+        daemon::clear_active_process(root, run_id)?;
+        let output = output?;
+        if output.exit_code != Some(0) {
+            bail!(
+                "command step {} failed with {:?}",
+                step.id,
+                output.exit_code
+            );
+        }
+        return Ok((crate::engine::StepOutcome::Command(output), vec![started]));
+    }
+
+    WorkflowEngine::execute_step_with_events(step, workspace, RetryPolicy::default()).await
+}
+
+async fn run_run_command(root: &Path, command: RunCommand) -> Result<()> {
     match command {
         RunCommand::List => {
             for run_id in list_run_ids(root)? {
@@ -308,15 +417,57 @@ fn run_run_command(root: &Path, command: RunCommand) -> Result<()> {
             Ok(())
         }
         RunCommand::Cancel { run_id } => {
-            EventStore::new(root).append(&FlowEvent::new(
-                EventType::RunFinished,
-                run_id,
-                json!({ "status": "CANCELLED", "source": "cli" }),
-            ))?;
-            println!("cancel requested: {run_id}");
+            cancel_run(root, run_id).await?;
             Ok(())
         }
     }
+}
+
+async fn cancel_run(root: &Path, run_id: Uuid) -> Result<()> {
+    daemon::request_cancel(root, run_id)?;
+    let store = EventStore::new(root);
+
+    if let Some(active) = daemon::read_active_process(root, run_id)? {
+        for event in ProcessSupervisor::kill_process_tree_events(
+            run_id,
+            Some(active.step_id),
+            active.pid,
+            &active.command,
+        )
+        .await?
+        {
+            store.append(&event)?;
+        }
+        println!("cancel requested and process killed: {run_id}");
+        return Ok(());
+    }
+
+    if daemon::remove_queued_run(root, run_id)? {
+        store.append(&FlowEvent::new(
+            EventType::StateChanged,
+            run_id,
+            json!(StateChangedPayload {
+                from: RunState::Queued,
+                to: RunState::Cancelled,
+            }),
+        ))?;
+        store.append(&FlowEvent::new(
+            EventType::RunFinished,
+            run_id,
+            json!({ "status": "CANCELLED", "source": "cli", "queued": true }),
+        ))?;
+        daemon::clear_cancel(root, run_id)?;
+        println!("queued run cancelled: {run_id}");
+        return Ok(());
+    }
+
+    store.append(&FlowEvent::new(
+        EventType::RunFinished,
+        run_id,
+        json!({ "status": "CANCELLED", "source": "cli" }),
+    ))?;
+    println!("cancel requested: {run_id}");
+    Ok(())
 }
 
 fn run_step_command(root: &Path, command: StepCommand) -> Result<()> {
@@ -350,8 +501,10 @@ async fn run_plugin_command(root: &Path, command: PluginCommand) -> Result<()> {
         }
         PluginCommand::Test { command, sample } => {
             let source = fs::read_to_string(sample)?;
-            let output = PluginRuntime::parse_output(&source)
-                .or_else(|_| async_plugin_test(&command, root, &source))?;
+            let output = match PluginRuntime::parse_output(&source) {
+                Ok(output) => output,
+                Err(_) => plugin_test(&command, root, &source).await?,
+            };
             println!("{}", serde_json::to_string_pretty(&output)?);
             Ok(())
         }
@@ -378,12 +531,28 @@ async fn run_plugin_command(root: &Path, command: PluginCommand) -> Result<()> {
     }
 }
 
-fn async_plugin_test(
-    _command: &str,
-    _root: &Path,
-    _sample: &str,
+async fn plugin_test(
+    command: &str,
+    root: &Path,
+    sample: &str,
 ) -> Result<crate::plugins::PluginOutput> {
-    bail!("plugin command execution is available through workflow plugin steps")
+    let mut input = serde_json::from_str::<PluginInput>(sample)
+        .context("plugin test sample must be a plugin input JSON or plugin output JSON")?;
+    let test_id = Uuid::new_v4();
+    let workspace = root
+        .join(".flow")
+        .join("plugin-tests")
+        .join(test_id.to_string())
+        .join("workspace");
+    fs::create_dir_all(&workspace).with_context(|| {
+        format!(
+            "failed to create plugin test workspace {}",
+            workspace.display()
+        )
+    })?;
+    input.flow.run_id = test_id;
+    input.paths.work_dir = workspace.display().to_string();
+    PluginRuntime::run(command, &workspace, &input).await
 }
 
 fn run_package_command(root: &Path, command: PackageCommand) -> Result<()> {
@@ -421,38 +590,127 @@ fn run_test_command(root: &Path, job_id: &str, verbose: bool) -> Result<()> {
     Ok(())
 }
 
-fn run_daemon_command(root: &Path, command: DaemonCommand) -> Result<()> {
-    let pid_file = root.join(".flow").join("daemon.pid");
+async fn run_daemon_command(root: &Path, command: DaemonCommand) -> Result<()> {
     match command {
         DaemonCommand::Start => {
-            if let Some(parent) = pid_file.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            if pid_file.exists() {
-                bail!("daemon already started");
-            }
-            fs::write(&pid_file, std::process::id().to_string())?;
-            println!("daemon started");
+            let pid = daemon::start_daemon(root)?;
+            println!("daemon starting: {pid}");
             Ok(())
         }
         DaemonCommand::Status => {
-            if pid_file.exists() {
-                println!("daemon running: {}", fs::read_to_string(pid_file)?.trim());
-            } else {
-                println!("daemon stopped");
+            match daemon::read_status(root)? {
+                Some(status) if daemon::is_daemon_running(root) => {
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                }
+                Some(status) => {
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                }
+                None => println!("daemon stopped"),
             }
             Ok(())
         }
         DaemonCommand::Stop => {
-            if pid_file.exists() {
-                fs::remove_file(pid_file)?;
-                println!("daemon stopped");
-            } else {
-                println!("daemon already stopped");
-            }
+            daemon::request_stop(root)?;
+            println!("daemon stop requested");
             Ok(())
         }
+        DaemonCommand::Restart => {
+            daemon::request_stop(root).ok();
+            wait_daemon_stopped(root, Duration::from_secs(10)).await?;
+            let pid = daemon::start_daemon(root)?;
+            println!("daemon restarted: {pid}");
+            Ok(())
+        }
+        DaemonCommand::Serve => serve_daemon(root).await,
     }
+}
+
+async fn serve_daemon(root: &Path) -> Result<()> {
+    let started_at = Utc::now();
+    write_daemon_status(root, started_at, DaemonState::Starting, None)?;
+
+    loop {
+        if daemon::stop_requested(root) {
+            write_daemon_status(root, started_at, DaemonState::Stopping, None)?;
+            break;
+        }
+
+        match daemon::next_run_request(root)? {
+            Some(request) => {
+                daemon::pop_run_request(root, request.run_id)?;
+                if daemon::cancel_requested(root, request.run_id) {
+                    finish_queued_cancel(root, request.run_id)?;
+                    continue;
+                }
+                write_daemon_status(root, started_at, DaemonState::Running, Some(request.run_id))?;
+                let _ = run_job_direct(
+                    root,
+                    &request.job_id,
+                    request.run_id,
+                    RunState::Queued,
+                    false,
+                    true,
+                )
+                .await;
+                write_daemon_status(root, started_at, DaemonState::Idle, None)?;
+            }
+            None => {
+                write_daemon_status(root, started_at, DaemonState::Idle, None)?;
+                sleep(Duration::from_millis(250)).await;
+            }
+        }
+    }
+
+    daemon::clear_daemon_files(root)
+}
+
+fn write_daemon_status(
+    root: &Path,
+    started_at: chrono::DateTime<Utc>,
+    state: DaemonState,
+    active_run: Option<Uuid>,
+) -> Result<()> {
+    daemon::write_status(
+        root,
+        &DaemonStatus {
+            pid: std::process::id(),
+            started_at,
+            heartbeat_at: Utc::now(),
+            state,
+            active_run,
+            queued_runs: daemon::queued_runs(root)?,
+        },
+    )
+}
+
+async fn wait_daemon_stopped(root: &Path, timeout: Duration) -> Result<()> {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        match daemon::read_status(root)? {
+            Some(status) if status.state == DaemonState::Stopped => return Ok(()),
+            None => return Ok(()),
+            _ => sleep(Duration::from_millis(250)).await,
+        }
+    }
+    anyhow::bail!("daemon did not stop before restart timeout")
+}
+
+fn finish_queued_cancel(root: &Path, run_id: Uuid) -> Result<()> {
+    let store = EventStore::new(root);
+    store.append(&FlowEvent::new(
+        EventType::StateChanged,
+        run_id,
+        json!(StateChangedPayload {
+            from: RunState::Queued,
+            to: RunState::Cancelled,
+        }),
+    ))?;
+    store.append(&FlowEvent::new(
+        EventType::RunFinished,
+        run_id,
+        json!({ "status": "CANCELLED", "source": "daemon", "queued": true }),
+    ))?;
+    daemon::clear_cancel(root, run_id)
 }
 
 fn run_retention_command(root: &Path, command: RetentionCommand) -> Result<()> {

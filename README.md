@@ -235,10 +235,11 @@ Inspect a manifest:
 flow plugin inspect .\my-plugin\plugin\manifest.json
 ```
 
-Validate plugin output JSON:
+Validate plugin output JSON, or execute a plugin command with a `PluginInput` sample. Real execution uses an isolated `.flow/plugin-tests/<uuid>/workspace` directory and validates the command stdout as plugin output JSON.
 
 ```powershell
 flow plugin test "unused-command" .\plugin-output.json
+flow plugin test "powershell -NoProfile -File .\plugin.ps1" .\plugin-input.json
 ```
 
 ### Packages
@@ -263,9 +264,12 @@ flow package install .\.flow\packages\demo.flowpkg
 flow daemon start
 flow daemon status
 flow daemon stop
+flow daemon restart
 ```
 
-Current state: the daemon command is a minimal PID lock, not a full long-running service yet.
+When the daemon is running, `flow job run <job_id>` enqueues the run instead of executing it in the foreground. The daemon processes the queue, exposes JSON status with heartbeat, active run and queue size, and supports clean stop/restart requests.
+
+`flow run cancel <run_id>` cancels queued runs directly. For an active daemon run, it records a cancel marker, kills the tracked process tree, writes `PROCESS_KILLED` / `PROCESS_TREE_KILLED`, and the daemon finishes the run as `CANCELLED`.
 
 ### Retention
 
@@ -363,9 +367,11 @@ Working now:
 - SQLite projections;
 - retention cleanup for runs and snapshots;
 - structured `.flowpkg` packages;
-- basic plugin runtime.
+- daemon queue with real status/stop/restart;
+- process-tree cancellation for daemon runs;
+- plugin runtime with isolated command test.
 
 Known limitations:
 
-- daemon is still minimal;
-- CLI cancellation is recorded in events, but does not stop a process already launched by a daemon;
+- no distributed worker protocol yet;
+- plugin execution is local-command based;

@@ -929,7 +929,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow job add</span><span class="cmd-desc" data-fr="Enregistre un workflow YAML" data-en="Register a YAML workflow">Enregistre un workflow YAML</span><span class="cmd-eg">flow job add workflow.yml</span></div>
         <div class="cmd-row"><span class="cmd-name">flow job list</span><span class="cmd-desc" data-fr="Liste les jobs enregistrés" data-en="List registered jobs">Liste les jobs enregistrés</span><span class="cmd-eg">flow job list</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow job run</span><span class="cmd-desc" data-fr="Exécute un job par son ID" data-en="Run a job by its ID">Exécute un job par son ID</span><span class="cmd-eg">flow job run demo</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow job run</span><span class="cmd-desc" data-fr="Exécute directement ou met en queue si le daemon tourne" data-en="Run directly or enqueue when the daemon is running">Exécute directement ou met en queue si le daemon tourne</span><span class="cmd-eg">flow job run demo</span></div>
         <div class="cmd-row"><span class="cmd-name">flow test</span><span class="cmd-desc" data-fr="Teste un job (--verbose)" data-en="Test a job (--verbose)">Teste un job (--verbose)</span><span class="cmd-eg">flow test demo --verbose</span></div>
       </div>
     </div>
@@ -938,7 +938,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow run list</span><span class="cmd-desc" data-fr="Liste tous les runs" data-en="List all runs">Liste tous les runs</span><span class="cmd-eg">flow run list</span></div>
         <div class="cmd-row"><span class="cmd-name">flow run logs</span><span class="cmd-desc" data-fr="Lit les logs JSONL d'un run" data-en="Read JSONL logs for a run">Lit les logs JSONL d'un run</span><span class="cmd-eg">flow run logs &lt;run_id&gt;</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow run cancel</span><span class="cmd-desc" data-fr="Annule un run (enregistré en events)" data-en="Cancel a run (recorded in events)">Annule un run (enregistré en events)</span><span class="cmd-eg">flow run cancel &lt;run_id&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow run cancel</span><span class="cmd-desc" data-fr="Annule une queue ou tue le process daemon actif" data-en="Cancel a queue entry or kill the active daemon process">Annule une queue ou tue le process daemon actif</span><span class="cmd-eg">flow run cancel &lt;run_id&gt;</span></div>
       </div>
     </div>
     <div class="cmd-group">
@@ -954,6 +954,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow plugin init</span><span class="cmd-desc" data-fr="Génère un squelette de plugin (rust/java/python/node)" data-en="Generate a plugin skeleton (rust/java/python/node)">Génère un squelette (rust/java/python/node)</span><span class="cmd-eg">flow plugin init rust ./my-plugin</span></div>
         <div class="cmd-row"><span class="cmd-name">flow plugin validate</span><span class="cmd-desc" data-fr="Valide un manifest de plugin" data-en="Validate a plugin manifest">Valide un manifest de plugin</span><span class="cmd-eg">flow plugin validate manifest.json</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow plugin test</span><span class="cmd-desc" data-fr="Exécute un plugin avec PluginInput isolé" data-en="Run a plugin with isolated PluginInput">Exécute un plugin avec PluginInput isolé</span><span class="cmd-eg">flow plugin test "cmd" input.json</span></div>
         <div class="cmd-row"><span class="cmd-name">flow package build</span><span class="cmd-desc" data-fr="Build un .flowpkg JSON avec checksum" data-en="Build a JSON .flowpkg with checksum">Build un .flowpkg JSON avec checksum</span><span class="cmd-eg">flow package build workflow.yml</span></div>
         <div class="cmd-row"><span class="cmd-name">flow package install</span><span class="cmd-desc" data-fr="Valide puis installe un package .flowpkg" data-en="Validate then install a .flowpkg package">Valide puis installe un package .flowpkg</span><span class="cmd-eg">flow package install demo.flowpkg</span></div>
       </div>
@@ -1015,12 +1016,14 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Projections SQLite" data-en="SQLite projections">Projections SQLite</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Rétention runs/snapshots" data-en="Run/snapshot retention">Rétention runs/snapshots</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Packages .flowpkg avec checksum" data-en=".flowpkg packages with checksums">Packages .flowpkg avec checksum</span></div>
-      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Runtime plugin de base" data-en="Basic plugin runtime">Runtime plugin de base</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Daemon long-running avec queue et statut" data-en="Long-running daemon with queue and status">Daemon long-running avec queue et statut</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Cancel réel avec kill du process tree" data-en="Real cancel with process-tree kill">Cancel réel avec kill du process tree</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Plugin test avec workspace isolé" data-en="Plugin test with isolated workspace">Plugin test avec workspace isolé</span></div>
     </div>
     <div class="status-card">
       <h4 data-fr="🔧 Limitations connues" data-en="🔧 Known limitations">🔧 Limitations connues</h4>
-      <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Daemon encore minimal (PID lock)" data-en="Daemon still minimal (PID lock)">Daemon encore minimal (PID lock)</span></div>
-      <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Annulation CLI ne stoppe pas un process daemon en cours" data-en="CLI cancel doesn't stop an already-running daemon process">Annulation CLI ne stoppe pas un process daemon déjà lancé</span></div>
+      <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Pas encore de workers distribués" data-en="No distributed workers yet">Pas encore de workers distribués</span></div>
+      <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Plugins locaux uniquement pour l'instant" data-en="Local plugins only for now">Plugins locaux uniquement pour l'instant</span></div>
     </div>
   </div>
 </section>

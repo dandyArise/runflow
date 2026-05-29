@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod config;
+pub mod daemon;
 pub mod dag;
 pub mod engine;
 pub mod events;

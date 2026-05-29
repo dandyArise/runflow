@@ -124,6 +124,29 @@ impl ProcessSupervisor {
 
         Ok(command_output(output, limits))
     }
+
+    pub async fn kill_process_tree_events(
+        run_id: Uuid,
+        step_id: Option<String>,
+        pid: u32,
+        command: &str,
+    ) -> Result<Vec<FlowEvent>> {
+        kill_process_tree(pid).await?;
+        Ok(vec![
+            process_event(
+                EventType::ProcessKilled,
+                run_id,
+                step_id.clone(),
+                json!({ "pid": pid, "command": command }),
+            ),
+            process_event(
+                EventType::ProcessTreeKilled,
+                run_id,
+                step_id,
+                json!({ "root_pid": pid, "command": command }),
+            ),
+        ])
+    }
 }
 
 impl ManagedProcess {
@@ -141,23 +164,16 @@ impl ManagedProcess {
     }
 
     pub async fn kill_tree(&mut self) -> Result<Vec<FlowEvent>> {
-        kill_process_tree(self.pid).await?;
+        let events = ProcessSupervisor::kill_process_tree_events(
+            self.run_id,
+            self.step_id.clone(),
+            self.pid,
+            &self.command,
+        )
+        .await?;
         let _ = self.child.kill().await;
 
-        Ok(vec![
-            process_event(
-                EventType::ProcessKilled,
-                self.run_id,
-                self.step_id.clone(),
-                json!({ "pid": self.pid, "command": self.command }),
-            ),
-            process_event(
-                EventType::ProcessTreeKilled,
-                self.run_id,
-                self.step_id.clone(),
-                json!({ "root_pid": self.pid, "command": self.command }),
-            ),
-        ])
+        Ok(events)
     }
 }
 
