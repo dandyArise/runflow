@@ -10,6 +10,7 @@ It currently supports:
 - writing run events as JSONL;
 - listing runs and reading run logs;
 - recording manual step actions;
+- pruning old run data with retention policies;
 - initializing and validating plugin manifests;
 - building and installing simple `.flowpkg` packages.
 
@@ -258,9 +259,11 @@ Current state: the daemon command is a minimal PID lock, not a full long-running
 
 ```powershell
 flow retention run
+flow retention run --dry-run --keep-runs 20
+flow retention run --keep-runs 20 --older-than-days 30
 ```
 
-Current state: real purge logic is planned for a later phase.
+Retention scans `.flow/runs`, keeps the newest runs according to `--keep-runs`, optionally limits deletion to runs older than `--older-than-days`, and removes matching run snapshots too. With no policy options, it only scans and reports `0` removals.
 
 ## Minimal Workflow Format
 
@@ -345,11 +348,11 @@ Working now:
 - isolated workspaces;
 - snapshots;
 - SQLite projections;
+- retention cleanup for runs and snapshots;
 - basic plugin runtime.
 
 Known limitations:
 
 - daemon is still minimal;
 - CLI cancellation is recorded in events, but does not stop a process already launched by a daemon;
-- retention does not purge data yet;
 - packaging is still simple and based on the workflow YAML.

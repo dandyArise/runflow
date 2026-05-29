@@ -10,6 +10,7 @@ use crate::dag::{WorkflowDefinition, WorkflowGraph};
 use crate::engine::{RetryPolicy, WorkflowEngine};
 use crate::events::{EventStore, EventType, FlowEvent};
 use crate::plugins::{PluginManifest, PluginRuntime, parse_manifest};
+use crate::retention::{RetentionPolicy, run_retention};
 use crate::schemas;
 use crate::state::{RunState, StateChangedPayload};
 use crate::workspace::WorkspaceIsolation;
@@ -135,7 +136,14 @@ enum DaemonCommand {
 
 #[derive(Debug, Subcommand)]
 enum RetentionCommand {
-    Run,
+    Run {
+        #[arg(long)]
+        keep_runs: Option<usize>,
+        #[arg(long)]
+        older_than_days: Option<u64>,
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 impl Cli {
@@ -155,7 +163,7 @@ impl Cli {
                 Ok(())
             }
             Command::Daemon { command } => run_daemon_command(&root, command),
-            Command::Retention { command } => run_retention_command(command),
+            Command::Retention { command } => run_retention_command(&root, command),
             Command::Version => {
                 println!("runflow {}", env!("CARGO_PKG_VERSION"));
                 Ok(())
@@ -429,10 +437,25 @@ fn run_daemon_command(root: &Path, command: DaemonCommand) -> Result<()> {
     }
 }
 
-fn run_retention_command(command: RetentionCommand) -> Result<()> {
+fn run_retention_command(root: &Path, command: RetentionCommand) -> Result<()> {
     match command {
-        RetentionCommand::Run => {
-            println!("retention run accepted; purge logic is implemented in phase 8");
+        RetentionCommand::Run {
+            keep_runs,
+            older_than_days,
+            dry_run,
+        } => {
+            let report = run_retention(
+                root,
+                RetentionPolicy {
+                    keep_runs,
+                    older_than_days,
+                    dry_run,
+                },
+            )?;
+            println!(
+                "retention scanned={} removed_runs={} removed_files={} dry_run={}",
+                report.scanned_runs, report.removed_runs, report.removed_files, report.dry_run
+            );
             Ok(())
         }
     }

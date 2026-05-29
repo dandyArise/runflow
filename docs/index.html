@@ -820,7 +820,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="step">
       <div class="step-num">03</div>
       <h3 data-fr="Consulte les runs" data-en="Inspect your runs">Consulte les runs</h3>
-      <p data-fr="Liste tes runs, lis les logs JSONL, annule ou rejoue des steps manuellement. Tout est traçable." data-en="List your runs, read JSONL logs, cancel or replay steps manually. Everything is traceable.">Liste tes runs, lis les logs JSONL, annule ou rejoue des steps. Tout est traçable.</p>
+      <p data-fr="Liste tes runs, lis les logs JSONL, annule ou rejoue des steps manuellement. Nettoie les anciens runs avec la rétention." data-en="List your runs, read JSONL logs, cancel or replay steps manually. Clean up old runs with retention.">Liste tes runs, lis les logs JSONL, annule ou rejoue des steps. Nettoie les anciens runs avec la rétention.</p>
       <div class="step-code"><span class="tprompt">$ </span>flow run logs &lt;run_id&gt;</div>
     </div>
   </div>
@@ -861,6 +861,11 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="f-icon">🗄️</div>
       <h4 data-fr="SQLite projections" data-en="SQLite projections">SQLite projections</h4>
       <p data-fr="Les runs et jobs sont projetés en SQLite pour des requêtes rapides et fiables." data-en="Runs and jobs are projected into SQLite for fast, reliable queries.">Runs et jobs projetés en SQLite pour des requêtes rapides.</p>
+    </div>
+    <div class="feature">
+      <div class="f-icon">🧹</div>
+      <h4 data-fr="Rétention des runs" data-en="Run retention">Rétention des runs</h4>
+      <p data-fr="Supprime les anciens runs et snapshots avec dry-run, limite de conservation et seuil d'âge." data-en="Prune old runs and snapshots with dry-run, keep limits, and age thresholds.">Supprime les anciens runs et snapshots avec dry-run, limite de conservation et seuil d'âge.</p>
     </div>
   </div>
 </section>
@@ -948,6 +953,13 @@ footer p { font-size: .77rem; color: var(--text-dim); }
         <div class="cmd-row"><span class="cmd-name">flow package install</span><span class="cmd-desc" data-fr="Installe un package .flowpkg" data-en="Install a .flowpkg package">Installe un package .flowpkg</span><span class="cmd-eg">flow package install demo.flowpkg</span></div>
       </div>
     </div>
+    <div class="cmd-group">
+      <div class="cmd-group-title" data-fr="Rétention" data-en="Retention">Rétention</div>
+      <div class="cmd-list">
+        <div class="cmd-row"><span class="cmd-name">flow retention run</span><span class="cmd-desc" data-fr="Scanne ou purge les anciens runs" data-en="Scan or prune old runs">Scanne ou purge les anciens runs</span><span class="cmd-eg">flow retention run --dry-run --keep-runs 20</span></div>
+        <div class="cmd-row"><span class="cmd-name">--older-than-days</span><span class="cmd-desc" data-fr="Ne supprime que les runs plus anciens que ce seuil" data-en="Only delete runs older than this threshold">Ne supprime que les runs plus anciens que ce seuil</span><span class="cmd-eg">flow retention run --keep-runs 20 --older-than-days 30</span></div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -995,13 +1007,13 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Moteur d'exécution local" data-en="Local execution engine">Moteur d'exécution local</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Workspaces isolés" data-en="Isolated workspaces">Workspaces isolés</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Projections SQLite" data-en="SQLite projections">Projections SQLite</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Rétention runs/snapshots" data-en="Run/snapshot retention">Rétention runs/snapshots</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Runtime plugin de base" data-en="Basic plugin runtime">Runtime plugin de base</span></div>
     </div>
     <div class="status-card">
       <h4 data-fr="🔧 Limitations connues" data-en="🔧 Known limitations">🔧 Limitations connues</h4>
       <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Daemon encore minimal (PID lock)" data-en="Daemon still minimal (PID lock)">Daemon encore minimal (PID lock)</span></div>
       <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Annulation CLI ne stoppe pas un process daemon en cours" data-en="CLI cancel doesn't stop an already-running daemon process">Annulation CLI ne stoppe pas un process daemon déjà lancé</span></div>
-      <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Retention sans purge réelle encore" data-en="Retention without real purge yet">Retention sans purge réelle encore</span></div>
       <div class="status-item"><span class="si-dot plan"></span><span class="si-text" data-fr="Packaging encore simple (YAML-based)" data-en="Packaging still simple (YAML-based)">Packaging encore simple (YAML-based)</span></div>
     </div>
   </div>
