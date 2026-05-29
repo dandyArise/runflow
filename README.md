@@ -1,32 +1,32 @@
 # RunFlow
 
-RunFlow est un runner de workflows local, écrit en Rust. Le binaire CLI s'appelle `flow`.
+RunFlow is a local workflow runner written in Rust. The CLI binary is named `flow`.
 
-Il sait déjà :
+It currently supports:
 
-- valider des workflows YAML ;
-- enregistrer et lancer des jobs ;
-- créer un workspace isolé par run ;
-- écrire les événements du run en JSONL ;
-- afficher les runs et leurs logs ;
-- gérer les actions manuelles de step ;
-- initialiser et valider des manifests plugin ;
-- construire et installer un package simple `.flowpkg`.
+- validating YAML workflows;
+- registering and running jobs;
+- creating an isolated workspace per run;
+- writing run events as JSONL;
+- listing runs and reading run logs;
+- recording manual step actions;
+- initializing and validating plugin manifests;
+- building and installing simple `.flowpkg` packages.
 
-## Prérequis
+## Requirements
 
-- Windows PowerShell ;
-- Git ;
-- Rust stable avec Cargo.
+- Windows PowerShell;
+- Git;
+- stable Rust with Cargo.
 
-Vérifier Rust :
+Check Rust:
 
 ```powershell
 rustc --version
 cargo --version
 ```
 
-## Installation depuis GitHub
+## Install From GitHub
 
 ```powershell
 git clone https://github.com/dandyArise/runflow.git
@@ -34,13 +34,13 @@ Set-Location .\runflow
 cargo build --release
 ```
 
-Le binaire est généré ici :
+The binary is generated here:
 
 ```powershell
 .\target\release\flow.exe
 ```
 
-Optionnel : ajouter le dossier au `PATH` pour utiliser `flow` partout.
+Optional: add the release directory to your user `PATH`.
 
 ```powershell
 $runflowBin = (Resolve-Path .\target\release).Path
@@ -51,29 +51,29 @@ $runflowBin = (Resolve-Path .\target\release).Path
 )
 ```
 
-Ouvrir un nouveau terminal, puis vérifier :
+Open a new terminal, then verify the install:
 
 ```powershell
 flow version
 ```
 
-## Utilisation sans installation globale
+## Use Without Global Install
 
-Depuis le dossier du repo :
+From the repository directory:
 
 ```powershell
 cargo run -- version
 ```
 
-Pour passer des options au binaire :
+Pass options to the binary after `--`:
 
 ```powershell
 cargo run -- --root . version
 ```
 
-## Exemple rapide
+## Quick Start
 
-Créer `workflow.yml` :
+Create `workflow.yml`:
 
 ```yaml
 id: demo
@@ -85,49 +85,49 @@ steps:
     run: echo hello
 ```
 
-Valider :
+Validate it:
 
 ```powershell
 flow validate .\workflow.yml
 ```
 
-Ajouter le job :
+Register the job:
 
 ```powershell
 flow job add .\workflow.yml
 ```
 
-Lister les jobs :
+List jobs:
 
 ```powershell
 flow job list
 ```
 
-Lancer le job :
+Run the job:
 
 ```powershell
 flow job run demo
 ```
 
-La commande retourne un `run_id`.
+The command prints a `run_id`.
 
-Lister les runs :
+List runs:
 
 ```powershell
 flow run list
 ```
 
-Afficher les logs JSONL d'un run :
+Read JSONL logs for a run:
 
 ```powershell
 flow run logs <run_id>
 ```
 
-## Racine de travail
+## Workspace Root
 
-Par défaut, RunFlow utilise le dossier courant comme racine.
+By default, RunFlow uses the current directory as its root.
 
-Pour isoler les données dans un autre dossier :
+Use `--root` to store runtime data somewhere else:
 
 ```powershell
 flow --root C:\Temp\runflow-demo job add .\workflow.yml
@@ -135,7 +135,7 @@ flow --root C:\Temp\runflow-demo job run demo
 flow --root C:\Temp\runflow-demo run list
 ```
 
-RunFlow crée ses données internes dans :
+RunFlow stores internal data in:
 
 ```text
 .flow/
@@ -145,9 +145,9 @@ RunFlow crée ses données internes dans :
   plugins/
 ```
 
-Le dossier `.flow/` est ignoré par Git.
+The `.flow/` directory is ignored by Git.
 
-## Commandes CLI
+## CLI Commands
 
 ### Version
 
@@ -162,7 +162,7 @@ flow validate .\workflow.yml
 flow migrate .\workflow.yml
 ```
 
-`migrate` valide actuellement le workflow et indique qu'aucune migration n'est requise.
+`migrate` currently validates the workflow and reports that no migration is required.
 
 ### Jobs
 
@@ -184,7 +184,7 @@ flow run cancel <run_id>
 
 ### Steps
 
-Ces commandes enregistrent une action manuelle dans l'event log du run.
+These commands record a manual action in the run event log.
 
 ```powershell
 flow step retry <run_id> <step_id>
@@ -194,7 +194,7 @@ flow step skip <run_id> <step_id>
 flow step rerun-from <run_id> <step_id>
 ```
 
-### Test de job
+### Job Test
 
 ```powershell
 flow test <job_id>
@@ -203,7 +203,7 @@ flow test <job_id> --verbose
 
 ### Plugins
 
-Initialiser un squelette plugin :
+Initialize a plugin skeleton:
 
 ```powershell
 flow plugin init rust .\my-plugin
@@ -212,19 +212,19 @@ flow plugin init python .\my-plugin
 flow plugin init node .\my-plugin
 ```
 
-Valider un manifest plugin :
+Validate a plugin manifest:
 
 ```powershell
 flow plugin validate .\my-plugin\plugin\manifest.json
 ```
 
-Inspecter un manifest :
+Inspect a manifest:
 
 ```powershell
 flow plugin inspect .\my-plugin\plugin\manifest.json
 ```
 
-Tester une sortie plugin JSON :
+Validate plugin output JSON:
 
 ```powershell
 flow plugin test "unused-command" .\plugin-output.json
@@ -232,13 +232,13 @@ flow plugin test "unused-command" .\plugin-output.json
 
 ### Packages
 
-Construire un package depuis un workflow :
+Build a package from a workflow:
 
 ```powershell
 flow package build .\workflow.yml
 ```
 
-Installer un package :
+Install a package:
 
 ```powershell
 flow package install .\.flow\packages\demo.flowpkg
@@ -252,7 +252,7 @@ flow daemon status
 flow daemon stop
 ```
 
-État actuel : le daemon est un verrou PID minimal, pas encore un service long-running complet.
+Current state: the daemon command is a minimal PID lock, not a full long-running service yet.
 
 ### Retention
 
@@ -260,9 +260,9 @@ flow daemon stop
 flow retention run
 ```
 
-État actuel : la purge réelle est prévue pour une phase suivante.
+Current state: real purge logic is planned for a later phase.
 
-## Format workflow minimal
+## Minimal Workflow Format
 
 ```yaml
 id: backup-db
@@ -274,14 +274,14 @@ steps:
     run: echo backup
 ```
 
-Types de steps supportés dans le moteur actuel :
+Supported step types in the current engine:
 
 - `command`
 - `sleep`
 - `wait_until`
 - `plugin`
 
-Exemple `sleep` :
+Example `sleep` step:
 
 ```yaml
 id: wait-demo
@@ -293,63 +293,63 @@ steps:
     duration: 1s
 ```
 
-## Développement
+## Development
 
-Formater :
+Format:
 
 ```powershell
 cargo fmt --all
 ```
 
-Vérifier le format :
+Check formatting:
 
 ```powershell
 cargo fmt --all --check
 ```
 
-Lint strict :
+Strict lint:
 
 ```powershell
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-Tests :
+Tests:
 
 ```powershell
 cargo test --all
 ```
 
-Build :
+Build:
 
 ```powershell
 cargo build --all
 ```
 
-Build release :
+Release build:
 
 ```powershell
 cargo build --release
 ```
 
-## État actuel
+## Current Status
 
-RunFlow est en développement actif.
+RunFlow is under active development.
 
-Fonctionnel maintenant :
+Working now:
 
-- CLI complète S6 ;
-- validation de schémas ;
-- event store JSONL ;
-- DAG workflow ;
-- moteur d'exécution local ;
-- workspace isolé ;
-- snapshots ;
-- projections SQLite ;
-- runtime plugin de base.
+- complete S6 CLI;
+- schema validation;
+- JSONL event store;
+- workflow DAG;
+- local execution engine;
+- isolated workspaces;
+- snapshots;
+- SQLite projections;
+- basic plugin runtime.
 
-Limites connues :
+Known limitations:
 
-- daemon encore minimal ;
-- cancellation CLI enregistrée dans les événements, sans arrêt d'un processus déjà lancé par un daemon ;
-- retention sans purge réelle ;
-- packaging encore simple, basé sur le YAML workflow.
+- daemon is still minimal;
+- CLI cancellation is recorded in events, but does not stop a process already launched by a daemon;
+- retention does not purge data yet;
+- packaging is still simple and based on the workflow YAML.
