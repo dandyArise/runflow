@@ -15,6 +15,15 @@ pub struct PluginRef {
     pub version: String,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PluginManifest {
+    pub id: String,
+    pub version: String,
+    pub contract_version: String,
+    pub author: String,
+    pub description: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PluginInput {
     pub contract_version: String,
@@ -115,6 +124,29 @@ impl PluginRuntime {
     }
 }
 
+pub fn parse_manifest(source: &str) -> Result<PluginManifest> {
+    let manifest: PluginManifest =
+        serde_json::from_str(source).context("failed to parse plugin manifest")?;
+    validate_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+fn validate_manifest(manifest: &PluginManifest) -> Result<()> {
+    if manifest.id.trim().is_empty() {
+        bail!("plugin manifest id is required");
+    }
+    if manifest.version.trim().is_empty() {
+        bail!("plugin manifest version is required");
+    }
+    if manifest.contract_version != "v1" {
+        bail!(
+            "unsupported plugin contract version: {}",
+            manifest.contract_version
+        );
+    }
+    Ok(())
+}
+
 fn validate_input(input: &PluginInput) -> Result<()> {
     let value = serde_json::to_value(input).context("failed to convert plugin input to JSON")?;
     let diagnostics = schemas::validate_value(SchemaKind::PluginInput, &value)?;
@@ -154,6 +186,22 @@ mod tests {
 
         assert_eq!(output.status, PluginStatus::Success);
         assert_eq!(output.exit_code, 0);
+    }
+
+    #[test]
+    fn parses_valid_plugin_manifest() {
+        let manifest = parse_manifest(
+            r#"{
+  "id": "demo-plugin",
+  "version": "0.1.0",
+  "contract_version": "v1",
+  "author": "TODO",
+  "description": "TODO"
+}"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.id, "demo-plugin");
     }
 
     #[test]
