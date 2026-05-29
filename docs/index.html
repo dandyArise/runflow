@@ -820,7 +820,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="step">
       <div class="step-num">03</div>
       <h3 data-fr="Consulte les runs" data-en="Inspect your runs">Consulte les runs</h3>
-      <p data-fr="Liste tes runs, lis les logs JSONL, annule ou rejoue des steps manuellement. Nettoie les anciens runs avec la rétention." data-en="List your runs, read JSONL logs, cancel or replay steps manually. Clean up old runs with retention.">Liste tes runs, lis les logs JSONL, annule ou rejoue des steps. Nettoie les anciens runs avec la rétention.</p>
+      <p data-fr="Liste tes runs, lis les logs JSONL, consulte les manifests de complétion et nettoie les anciens runs avec la rétention." data-en="List runs, read JSONL logs, inspect completion manifests, and clean up old runs with retention.">Liste tes runs, lis les logs JSONL, consulte les manifests de complétion et nettoie les anciens runs avec la rétention.</p>
       <div class="step-code"><span class="tprompt">$ </span>flow run logs &lt;run_id&gt;</div>
     </div>
   </div>
@@ -841,6 +841,11 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="f-icon">📄</div>
       <h4 data-fr="JSONL event store" data-en="JSONL event store">JSONL event store</h4>
       <p data-fr="Chaque événement de run est écrit en JSONL. Historique complet, lisible et interrogeable." data-en="Every run event is written as JSONL. Complete, readable, queryable history.">Chaque événement de run est écrit en JSONL. Historique complet et lisible.</p>
+    </div>
+    <div class="feature">
+      <div class="f-icon">🧾</div>
+      <h4 data-fr="Run manifests" data-en="Run manifests">Run manifests</h4>
+      <p data-fr="Chaque run terminé produit manifest.json avec statut final, timestamps, policy et métriques." data-en="Each completed run writes manifest.json with final status, timestamps, policy, and metrics.">Chaque run terminé produit manifest.json avec statut final, timestamps, policy et métriques.</p>
     </div>
     <div class="feature">
       <div class="f-icon">🗂️</div>
@@ -1004,6 +1009,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="CLI complet S6" data-en="Full S6 CLI">CLI complet S6</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Validation de schéma YAML" data-en="YAML schema validation">Validation de schéma YAML</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="JSONL event store" data-en="JSONL event store">JSONL event store</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Manifests de complétion" data-en="Completion manifests">Manifests de complétion</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Moteur d'exécution local" data-en="Local execution engine">Moteur d'exécution local</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Workspaces isolés" data-en="Isolated workspaces">Workspaces isolés</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Projections SQLite" data-en="SQLite projections">Projections SQLite</span></div>

@@ -4,6 +4,7 @@ pub mod dag;
 pub mod engine;
 pub mod events;
 pub mod locks;
+pub mod manifest;
 pub mod packages;
 pub mod plugins;
 pub mod projections;

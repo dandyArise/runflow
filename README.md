@@ -8,6 +8,7 @@ It currently supports:
 - registering and running jobs;
 - creating an isolated workspace per run;
 - writing run events as JSONL;
+- writing completion manifests for finished runs;
 - listing runs and reading run logs;
 - recording manual step actions;
 - pruning old run data with retention policies;
@@ -124,6 +125,14 @@ Read JSONL logs for a run:
 flow run logs <run_id>
 ```
 
+Each completed run also writes:
+
+```text
+.flow/runs/<run_id>/manifest.json
+```
+
+The manifest includes workflow versions, timestamps, final status, failure policy, artifacts, and basic metrics.
+
 ## Workspace Root
 
 By default, RunFlow uses the current directory as its root.
@@ -142,6 +151,7 @@ RunFlow stores internal data in:
 .flow/
   jobs/
   runs/
+    <run_id>/manifest.json
   packages/
   plugins/
 ```
@@ -345,6 +355,7 @@ Working now:
 - complete S6 CLI;
 - schema validation;
 - JSONL event store;
+- run completion manifests;
 - workflow DAG;
 - local execution engine;
 - isolated workspaces;

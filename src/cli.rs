@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use chrono::Utc;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
 use uuid::Uuid;
@@ -9,6 +10,7 @@ use uuid::Uuid;
 use crate::dag::{WorkflowDefinition, WorkflowGraph};
 use crate::engine::{RetryPolicy, WorkflowEngine};
 use crate::events::{EventStore, EventType, FlowEvent};
+use crate::manifest::write_run_manifest;
 use crate::packages::{
     build_package_from_workflow_file, read_package_or_legacy_workflow, write_package,
 };
@@ -206,6 +208,7 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
     let workflow = WorkflowDefinition::from_yaml(&source)?;
     let graph = WorkflowGraph::build(&workflow)?;
     let run_id = Uuid::new_v4();
+    let started_at = Utc::now();
     let event_store = EventStore::new(root);
     let workspace = WorkspaceIsolation::new(root).create(run_id)?;
 
@@ -229,6 +232,7 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
     ))?;
 
     let mut status = RunState::Success;
+    let mut failed_step_count = 0;
     let ordered = graph.ordered_steps()?;
     for step_id in ordered {
         let step = workflow
@@ -255,6 +259,7 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
                     run_id,
                     json!({ "step_id": step.id, "error": error.to_string() }),
                 ))?;
+                failed_step_count += 1;
                 status = RunState::Failed;
                 break;
             }
@@ -274,6 +279,15 @@ async fn run_job(root: &Path, job_id: &str) -> Result<()> {
         run_id,
         json!({ "status": format!("{status:?}") }),
     ))?;
+    write_run_manifest(
+        &workspace.run_dir,
+        &workflow,
+        run_id,
+        started_at,
+        Utc::now(),
+        status,
+        failed_step_count,
+    )?;
 
     println!("{run_id}");
     Ok(())
@@ -616,7 +630,15 @@ steps:
         .unwrap();
 
         assert_eq!(list_job_ids(&root).unwrap(), vec!["hello".to_owned()]);
-        assert_eq!(list_run_ids(&root).unwrap().len(), 1);
+        let runs = list_run_ids(&root).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert!(
+            root.join(".flow")
+                .join("runs")
+                .join(&runs[0])
+                .join("manifest.json")
+                .exists()
+        );
 
         fs::remove_dir_all(root).ok();
     }
