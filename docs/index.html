@@ -855,7 +855,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="feature">
       <div class="f-icon">📦</div>
       <h4 data-fr="Packages .flowpkg" data-en=".flowpkg packages">.flowpkg packages</h4>
-      <p data-fr="Build et installe des packages depuis un workflow YAML. Format simple et portable." data-en="Build and install packages from a YAML workflow. Simple, portable format.">Build et installe des packages depuis un workflow YAML.</p>
+      <p data-fr="Build et installe des packages JSON avec workflow YAML et checksum déterministe." data-en="Build and install JSON packages with workflow YAML and deterministic checksums.">Build et installe des packages JSON avec workflow YAML et checksum déterministe.</p>
     </div>
     <div class="feature">
       <div class="f-icon">🗄️</div>
@@ -949,8 +949,8 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow plugin init</span><span class="cmd-desc" data-fr="Génère un squelette de plugin (rust/java/python/node)" data-en="Generate a plugin skeleton (rust/java/python/node)">Génère un squelette (rust/java/python/node)</span><span class="cmd-eg">flow plugin init rust ./my-plugin</span></div>
         <div class="cmd-row"><span class="cmd-name">flow plugin validate</span><span class="cmd-desc" data-fr="Valide un manifest de plugin" data-en="Validate a plugin manifest">Valide un manifest de plugin</span><span class="cmd-eg">flow plugin validate manifest.json</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow package build</span><span class="cmd-desc" data-fr="Build un .flowpkg depuis un workflow" data-en="Build a .flowpkg from a workflow">Build un .flowpkg depuis un workflow</span><span class="cmd-eg">flow package build workflow.yml</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow package install</span><span class="cmd-desc" data-fr="Installe un package .flowpkg" data-en="Install a .flowpkg package">Installe un package .flowpkg</span><span class="cmd-eg">flow package install demo.flowpkg</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow package build</span><span class="cmd-desc" data-fr="Build un .flowpkg JSON avec checksum" data-en="Build a JSON .flowpkg with checksum">Build un .flowpkg JSON avec checksum</span><span class="cmd-eg">flow package build workflow.yml</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow package install</span><span class="cmd-desc" data-fr="Valide puis installe un package .flowpkg" data-en="Validate then install a .flowpkg package">Valide puis installe un package .flowpkg</span><span class="cmd-eg">flow package install demo.flowpkg</span></div>
       </div>
     </div>
     <div class="cmd-group">
@@ -1008,13 +1008,13 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Workspaces isolés" data-en="Isolated workspaces">Workspaces isolés</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Projections SQLite" data-en="SQLite projections">Projections SQLite</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Rétention runs/snapshots" data-en="Run/snapshot retention">Rétention runs/snapshots</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Packages .flowpkg avec checksum" data-en=".flowpkg packages with checksums">Packages .flowpkg avec checksum</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Runtime plugin de base" data-en="Basic plugin runtime">Runtime plugin de base</span></div>
     </div>
     <div class="status-card">
       <h4 data-fr="🔧 Limitations connues" data-en="🔧 Known limitations">🔧 Limitations connues</h4>
       <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Daemon encore minimal (PID lock)" data-en="Daemon still minimal (PID lock)">Daemon encore minimal (PID lock)</span></div>
       <div class="status-item"><span class="si-dot wip"></span><span class="si-text wip" data-fr="Annulation CLI ne stoppe pas un process daemon en cours" data-en="CLI cancel doesn't stop an already-running daemon process">Annulation CLI ne stoppe pas un process daemon déjà lancé</span></div>
-      <div class="status-item"><span class="si-dot plan"></span><span class="si-text" data-fr="Packaging encore simple (YAML-based)" data-en="Packaging still simple (YAML-based)">Packaging encore simple (YAML-based)</span></div>
     </div>
   </div>
 </section>

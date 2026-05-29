@@ -12,7 +12,7 @@ It currently supports:
 - recording manual step actions;
 - pruning old run data with retention policies;
 - initializing and validating plugin manifests;
-- building and installing simple `.flowpkg` packages.
+- building and installing structured `.flowpkg` packages with workflow checksums.
 
 ## Requirements
 
@@ -245,6 +245,8 @@ Install a package:
 flow package install .\.flow\packages\demo.flowpkg
 ```
 
+`.flowpkg` files are JSON packages containing the package format version, job id, workflow versions, the workflow YAML, and a deterministic workflow checksum. Installing still accepts legacy `.flowpkg` files that contain only workflow YAML.
+
 ### Daemon
 
 ```powershell
@@ -349,10 +351,10 @@ Working now:
 - snapshots;
 - SQLite projections;
 - retention cleanup for runs and snapshots;
+- structured `.flowpkg` packages;
 - basic plugin runtime.
 
 Known limitations:
 
 - daemon is still minimal;
 - CLI cancellation is recorded in events, but does not stop a process already launched by a daemon;
-- packaging is still simple and based on the workflow YAML.

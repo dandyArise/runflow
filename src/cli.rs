@@ -9,6 +9,9 @@ use uuid::Uuid;
 use crate::dag::{WorkflowDefinition, WorkflowGraph};
 use crate::engine::{RetryPolicy, WorkflowEngine};
 use crate::events::{EventStore, EventType, FlowEvent};
+use crate::packages::{
+    build_package_from_workflow_file, read_package_or_legacy_workflow, write_package,
+};
 use crate::plugins::{PluginManifest, PluginRuntime, parse_manifest};
 use crate::retention::{RetentionPolicy, run_retention};
 use crate::schemas;
@@ -372,21 +375,22 @@ fn async_plugin_test(
 fn run_package_command(root: &Path, command: PackageCommand) -> Result<()> {
     match command {
         PackageCommand::Build { workflow } => {
-            let source = fs::read_to_string(&workflow)?;
-            let definition = WorkflowDefinition::from_yaml(&source)?;
+            let package_data = build_package_from_workflow_file(&workflow)?;
             let package_dir = root.join(".flow").join("packages");
-            fs::create_dir_all(&package_dir)?;
-            let package = package_dir.join(format!("{}.flowpkg", definition.id));
-            fs::write(&package, source)?;
+            let package = package_dir.join(format!("{}.flowpkg", package_data.job_id));
+            write_package(&package_data, &package)?;
             println!("{}", package.display());
             Ok(())
         }
         PackageCommand::Install { package } => {
-            let source = fs::read_to_string(&package)?;
-            let definition = WorkflowDefinition::from_yaml(&source)?;
+            let (package_data, legacy) = read_package_or_legacy_workflow(&package)?;
             fs::create_dir_all(jobs_dir(root))?;
-            fs::write(job_path(root, &definition.id), source)?;
-            println!("package installed: {}", definition.id);
+            fs::write(job_path(root, &package_data.job_id), package_data.workflow)?;
+            if legacy {
+                println!("legacy package installed: {}", package_data.job_id);
+            } else {
+                println!("package installed: {}", package_data.job_id);
+            }
             Ok(())
         }
     }
