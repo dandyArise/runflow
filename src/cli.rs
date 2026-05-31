@@ -5,6 +5,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::time::{Duration, sleep};
 use uuid::Uuid;
@@ -931,6 +932,8 @@ async fn serve_daemon(root: &Path) -> Result<()> {
             break;
         }
 
+        enqueue_due_scheduled_runs(root, Utc::now())?;
+
         match daemon::next_run_request(root)? {
             Some(request) => {
                 daemon::pop_run_request(root, request.run_id)?;
@@ -958,6 +961,123 @@ async fn serve_daemon(root: &Path) -> Result<()> {
     }
 
     daemon::clear_daemon_files(root)
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+struct ScheduledJobState {
+    job_name: String,
+    cron: String,
+    next_run_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+fn enqueue_due_scheduled_runs(root: &Path, now: DateTime<Utc>) -> Result<usize> {
+    let mut enqueued = 0;
+    for job_name in list_job_names(root)? {
+        let source = read_job_source(root, &job_name)?;
+        let workflow = WorkflowDefinition::from_yaml(&source)?;
+        let Some(schedule) = workflow.schedule.as_ref() else {
+            remove_schedule_state(root, &job_name)?;
+            continue;
+        };
+        if !schedule.enabled() || workflow.steps.is_empty() {
+            remove_schedule_state(root, &job_name)?;
+            continue;
+        }
+
+        let cron = schedule.cron().to_owned();
+        let scheduler = Scheduler::parse(&cron)?;
+        let mut state = read_schedule_state(root, &job_name)?;
+        if state.as_ref().is_none_or(|state| state.cron != cron) {
+            let Some(next_run_at) = scheduler.next_after(now) else {
+                continue;
+            };
+            state = Some(ScheduledJobState {
+                job_name: job_name.clone(),
+                cron: cron.clone(),
+                next_run_at,
+                updated_at: now,
+            });
+        }
+
+        let mut state = state.expect("state initialized above");
+        if state.next_run_at <= now {
+            let run_id = Uuid::new_v4();
+            let event_store = EventStore::new(root);
+            event_store.append(&FlowEvent::new(
+                EventType::RunCreated,
+                run_id,
+                json!({
+                    "job_name": job_name,
+                    "source": "schedule",
+                    "scheduled_for": state.next_run_at,
+                }),
+            ))?;
+            event_store.append(&FlowEvent::new(
+                EventType::StateChanged,
+                run_id,
+                json!(StateChangedPayload {
+                    from: RunState::Created,
+                    to: RunState::Queued,
+                }),
+            ))?;
+            daemon::enqueue_run(
+                root,
+                &RunRequest {
+                    run_id,
+                    job_name: job_name.clone(),
+                    enqueued_at: now,
+                },
+            )?;
+            enqueued += 1;
+
+            while state.next_run_at <= now {
+                let Some(next_run_at) = scheduler.next_after(state.next_run_at) else {
+                    break;
+                };
+                state.next_run_at = next_run_at;
+            }
+        }
+        state.updated_at = now;
+        write_schedule_state(root, &state)?;
+    }
+    Ok(enqueued)
+}
+
+fn read_schedule_state(root: &Path, job_name: &str) -> Result<Option<ScheduledJobState>> {
+    let path = schedule_state_path(root, job_name);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let source =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    serde_json::from_str(&source)
+        .map(Some)
+        .with_context(|| format!("failed to parse {}", path.display()))
+}
+
+fn write_schedule_state(root: &Path, state: &ScheduledJobState) -> Result<()> {
+    let path = schedule_state_path(root, &state.job_name);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, serde_json::to_vec_pretty(state)?)
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn remove_schedule_state(root: &Path, job_name: &str) -> Result<()> {
+    let path = schedule_state_path(root, job_name);
+    if path.exists() {
+        fs::remove_file(&path).with_context(|| format!("failed to remove {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn schedule_state_path(root: &Path, job_name: &str) -> PathBuf {
+    root.join(".flow")
+        .join("daemon")
+        .join("schedules")
+        .join(format!("{job_name}.json"))
 }
 
 fn write_daemon_status(
@@ -1313,6 +1433,71 @@ steps:
         .unwrap_err();
 
         assert!(err.to_string().contains("has no steps"));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn scheduled_jobs_enqueue_when_due() {
+        let root = std::env::temp_dir().join(format!("runflow-schedule-{}", Uuid::new_v4()));
+        fs::create_dir_all(jobs_dir(&root)).unwrap();
+        fs::write(
+            job_path(&root, "scheduled-job"),
+            r#"
+name: scheduled-job
+schedule:
+  cron: "0 */5 * * * * *"
+  timezone: Europe/Paris
+  enabled: true
+steps:
+  - name: echo
+    type: command
+    run:
+      command: echo
+      args: ["hello"]
+"#,
+        )
+        .unwrap();
+
+        let start = "2026-05-31T14:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert_eq!(enqueue_due_scheduled_runs(&root, start).unwrap(), 0);
+        assert_eq!(daemon::queued_runs(&root).unwrap(), 0);
+
+        let due = "2026-05-31T14:05:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert_eq!(enqueue_due_scheduled_runs(&root, due).unwrap(), 1);
+        assert_eq!(daemon::queued_runs(&root).unwrap(), 1);
+        assert_eq!(
+            daemon::next_run_request(&root).unwrap().unwrap().job_name,
+            "scheduled-job"
+        );
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn disabled_scheduled_jobs_do_not_enqueue() {
+        let root = std::env::temp_dir().join(format!("runflow-schedule-{}", Uuid::new_v4()));
+        fs::create_dir_all(jobs_dir(&root)).unwrap();
+        fs::write(
+            job_path(&root, "disabled-job"),
+            r#"
+name: disabled-job
+schedule:
+  cron: "0 */5 * * * * *"
+  enabled: false
+steps:
+  - name: echo
+    type: command
+    run:
+      command: echo
+      args: ["hello"]
+"#,
+        )
+        .unwrap();
+
+        let due = "2026-05-31T14:05:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert_eq!(enqueue_due_scheduled_runs(&root, due).unwrap(), 0);
+        assert_eq!(daemon::queued_runs(&root).unwrap(), 0);
+
         fs::remove_dir_all(root).ok();
     }
 }

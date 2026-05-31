@@ -232,6 +232,8 @@ The short format remains supported and is equivalent to UTC + enabled:
 schedule: "0 */5 * * * * *"
 ```
 
+When `flow daemon start` is running, scheduled jobs are automatically enqueued when their next cron occurrence is due. The daemon stores schedule cursors in `.flow/daemon/schedules/` so a job is not enqueued twice for the same occurrence.
+
 Examples:
 
 ```text
@@ -340,7 +342,7 @@ flow daemon stop
 flow daemon restart
 ```
 
-When the daemon is running, `flow job run <job_name>` enqueues the run instead of executing it in the foreground. The daemon processes the queue, exposes JSON status with heartbeat, active run and queue size, and supports clean stop/restart requests.
+When the daemon is running, `flow job run <job_name>` enqueues the run instead of executing it in the foreground. The daemon also scans registered jobs with `schedule.enabled: true`, enqueues them at the next due cron occurrence, exposes JSON status with heartbeat, active run and queue size, and supports clean stop/restart requests.
 
 `flow run cancel <run_id>` cancels queued runs directly. For an active daemon run, it records a cancel marker, kills the tracked process tree, writes `PROCESS_KILLED` / `PROCESS_TREE_KILLED`, and the daemon finishes the run as `CANCELLED`.
 
