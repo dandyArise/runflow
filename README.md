@@ -196,6 +196,8 @@ RunFlow accepts cron expressions through the `cron` crate format:
 sec min hour day-of-month month day-of-week year
 ```
 
+The workflow `schedule` block is the real automation config used by the daemon. The `flow schedule` commands are preview helpers only; they do not run or enqueue anything.
+
 Preview the next executions for an expression:
 
 ```powershell
@@ -210,7 +212,7 @@ Preview the next executions from a workflow file containing `schedule:`:
 flow schedule workflow .\workflow.yml
 ```
 
-Recommended workflow format:
+Recommended workflow format for automatic daemon execution:
 
 ```yaml
 name: scheduled-job
