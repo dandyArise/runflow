@@ -107,9 +107,24 @@ enum JobCommand {
 #[derive(Debug, Subcommand)]
 enum RunCommand {
     List,
-    Show { run_id: Uuid },
-    Logs { run_id: Uuid },
-    Cancel { run_id: Uuid },
+    Show {
+        run_id: Uuid,
+    },
+    Logs {
+        run_id: Uuid,
+    },
+    Summary {
+        run_id: Uuid,
+    },
+    Output {
+        run_id: Uuid,
+        step_name: String,
+        #[arg(long)]
+        stderr: bool,
+    },
+    Cancel {
+        run_id: Uuid,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -577,11 +592,62 @@ async fn run_run_command(root: &Path, command: RunCommand) -> Result<()> {
             }
             Ok(())
         }
+        RunCommand::Summary { run_id } => print_saved_run_summary(root, run_id),
+        RunCommand::Output {
+            run_id,
+            step_name,
+            stderr,
+        } => print_step_output(root, run_id, &step_name, stderr),
         RunCommand::Cancel { run_id } => {
             cancel_run(root, run_id).await?;
             Ok(())
         }
     }
+}
+
+fn print_saved_run_summary(root: &Path, run_id: Uuid) -> Result<()> {
+    let path = logs::workflow_log_dir(root, run_id).join("workflow.metadata.json");
+    let source = fs::read_to_string(&path)
+        .with_context(|| format!("run summary not found: {}", path.display()))?;
+    let value: serde_json::Value =
+        serde_json::from_str(&source).context("failed to parse workflow metadata")?;
+    let workflow = value
+        .get("workflow_name")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown");
+    let status = value
+        .get("status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("UNKNOWN");
+    let log_dir = value
+        .get("log_dir")
+        .and_then(|value| value.as_str())
+        .unwrap_or("logs");
+    println!("Workflow: {workflow}");
+    println!("Status: {status}");
+    println!("Log dir: {log_dir}");
+    println!(
+        "Steps: total={} success={} failed={}",
+        json_number(&value, "total_steps"),
+        json_number(&value, "successful_steps"),
+        json_number(&value, "failed_steps")
+    );
+    Ok(())
+}
+
+fn print_step_output(root: &Path, run_id: Uuid, step_name: &str, stderr: bool) -> Result<()> {
+    let file_name = if stderr { "stderr.log" } else { "stdout.log" };
+    let path = logs::workflow_log_dir(root, run_id)
+        .join(step_name)
+        .join(file_name);
+    let source =
+        fs::read(&path).with_context(|| format!("step output not found: {}", path.display()))?;
+    print!("{}", String::from_utf8_lossy(&source));
+    Ok(())
+}
+
+fn json_number(value: &serde_json::Value, key: &str) -> u64 {
+    value.get(key).and_then(|value| value.as_u64()).unwrap_or(0)
 }
 
 async fn cancel_run(root: &Path, run_id: Uuid) -> Result<()> {
@@ -1026,6 +1092,19 @@ mod tests {
             vec!["flow", "job", "delete", "ping-demo"],
             vec!["flow", "job", "clear"],
             vec!["flow", "run", "list"],
+            vec![
+                "flow",
+                "run",
+                "summary",
+                "00000000-0000-0000-0000-000000000000",
+            ],
+            vec![
+                "flow",
+                "run",
+                "output",
+                "00000000-0000-0000-0000-000000000000",
+                "step",
+            ],
             vec![
                 "flow",
                 "run",

@@ -1,7 +1,9 @@
 /target/
 /.flow/
+/logs/
 /.repolens/
 /flowrun-codex-ready/
+/workflow.yml
 AGENTS.md
 AGENTS.md.candidate
 **/AGENTS.md

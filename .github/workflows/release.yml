@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist | Out-Null
+          Copy-Item target\release\flow.exe dist\flow-windows-x64.exe
+          Get-FileHash dist\flow-windows-x64.exe -Algorithm SHA256 |
+            Select-Object -ExpandProperty Hash |
+            Set-Content dist\flow-windows-x64.exe.sha256
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release create $tag `
+            dist\flow-windows-x64.exe `
+            dist\flow-windows-x64.exe.sha256 `
+            --title "RunFlow $tag" `
+            --generate-notes

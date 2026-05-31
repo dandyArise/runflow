@@ -206,8 +206,13 @@ flow job run <job_name>
 flow run list
 flow run show <run_id>
 flow run logs <run_id>
+flow run summary <run_id>
+flow run output <run_id> <step_name>
+flow run output <run_id> <step_name> --stderr
 flow run cancel <run_id>
 ```
+
+`run logs` reads JSONL events. `run summary` reads `logs/<run_id>/workflow.metadata.json`. `run output` prints `stdout.log` or `stderr.log` for one step.
 
 ### Steps
 
@@ -344,6 +349,65 @@ Avoid this in recommended examples:
 run:
   command: cmd
   args: ["/C", "ping -n 4 google.com > ping.log 2>&1"]
+```
+
+## Step By Step: Ping With Logs
+
+Create `workflow.yml`:
+
+```yaml
+name: ping-cloudflare
+version: 1
+schema_version: 1
+
+steps:
+  - name: ping_1111
+    type: command
+    run:
+      command: ping
+      args: ["-n", "4", "1.1.1.1"]
+```
+
+Run it:
+
+```powershell
+flow job add .\workflow.yml
+$runId = flow job run ping-cloudflare
+```
+
+Read the generated logs through RunFlow:
+
+```powershell
+flow run summary $runId
+flow run output $runId ping_1111
+flow run output $runId ping_1111 --stderr
+```
+
+Or read the files directly:
+
+```powershell
+Get-Content ".\logs\$runId\workflow.metadata.json"
+Get-Content ".\logs\$runId\ping_1111\step.metadata.json"
+Get-Content ".\logs\$runId\ping_1111\stdout.log"
+Get-Content ".\logs\$runId\ping_1111\stderr.log"
+```
+
+On Linux/macOS, use `args: ["-c", "4", "1.1.1.1"]` for `ping`.
+
+## Release
+
+GitHub Releases are built from tags:
+
+```powershell
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+The release workflow builds `flow.exe` on Windows and publishes:
+
+```text
+flow-windows-x64.exe
+flow-windows-x64.exe.sha256
 ```
 
 Supported step types in the current engine:

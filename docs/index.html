@@ -944,6 +944,8 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow run list</span><span class="cmd-desc" data-fr="Liste tous les runs et leur statut" data-en="List all runs and their status">Liste tous les runs et leur statut</span><span class="cmd-eg">flow run list</span></div>
         <div class="cmd-row"><span class="cmd-name">flow run logs</span><span class="cmd-desc" data-fr="Lit les events JSONL; stdout/stderr sont dans logs/&lt;run_id&gt;" data-en="Read JSONL events; stdout/stderr live in logs/&lt;run_id&gt;">Lit les events JSONL; stdout/stderr sont dans logs/&lt;run_id&gt;</span><span class="cmd-eg">flow run logs &lt;run_id&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow run summary</span><span class="cmd-desc" data-fr="Affiche le résumé workflow depuis logs/" data-en="Print workflow summary from logs/">Affiche le résumé workflow depuis logs/</span><span class="cmd-eg">flow run summary &lt;run_id&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow run output</span><span class="cmd-desc" data-fr="Affiche stdout ou stderr d'un step" data-en="Print a step stdout or stderr">Affiche stdout ou stderr d'un step</span><span class="cmd-eg">flow run output &lt;run_id&gt; ping_1111</span></div>
         <div class="cmd-row"><span class="cmd-name">flow run cancel</span><span class="cmd-desc" data-fr="Annule une queue ou tue le process daemon actif" data-en="Cancel a queue entry or kill the active daemon process">Annule une queue ou tue le process daemon actif</span><span class="cmd-eg">flow run cancel &lt;run_id&gt;</span></div>
       </div>
     </div>
@@ -1027,6 +1029,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Daemon long-running avec queue et statut" data-en="Long-running daemon with queue and status">Daemon long-running avec queue et statut</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Cancel réel avec kill du process tree" data-en="Real cancel with process-tree kill">Cancel réel avec kill du process tree</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Plugin test avec workspace isolé" data-en="Plugin test with isolated workspace">Plugin test avec workspace isolé</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Release Windows automatique sur tag" data-en="Automatic Windows release on tag">Release Windows automatique sur tag</span></div>
     </div>
     <div class="status-card">
       <h4 data-fr="🔧 Limitations connues" data-en="🔧 Known limitations">🔧 Limitations connues</h4>
