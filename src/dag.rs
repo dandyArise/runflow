@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result, bail};
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -15,7 +15,7 @@ pub enum FailurePolicy {
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub struct WorkflowDefinition {
-    pub id: String,
+    pub name: String,
     pub version: u32,
     pub schema_version: u32,
     pub schedule: Option<String>,
@@ -32,16 +32,70 @@ pub struct ConcurrencyDefinition {
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub struct StepDefinition {
-    pub id: String,
+    pub name: String,
     #[serde(rename = "type")]
     pub step_type: StepType,
     #[serde(default)]
     pub depends_on: Vec<String>,
-    pub run: Option<String>,
+    pub run: Option<RunDefinition>,
     pub plugin_id: Option<String>,
     pub duration: Option<String>,
     pub command: Option<String>,
     pub interval: Option<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RunDefinition {
+    LegacyShell(String),
+    Command(RunCommandDefinition),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RunCommandDefinition {
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub working_directory: Option<String>,
+}
+
+impl RunDefinition {
+    pub fn command(&self) -> &str {
+        match self {
+            Self::LegacyShell(command) => command,
+            Self::Command(command) => &command.command,
+        }
+    }
+
+    pub fn args(&self) -> &[String] {
+        match self {
+            Self::LegacyShell(_) => &[],
+            Self::Command(command) => &command.args,
+        }
+    }
+
+    pub fn working_directory(&self) -> Option<&str> {
+        match self {
+            Self::LegacyShell(_) => None,
+            Self::Command(command) => command.working_directory.as_deref(),
+        }
+    }
+
+    pub fn is_legacy_shell(&self) -> bool {
+        matches!(self, Self::LegacyShell(_))
+    }
+
+    pub fn display_command(&self) -> String {
+        match self {
+            Self::LegacyShell(command) => command.clone(),
+            Self::Command(command) if command.args.is_empty() => command.command.clone(),
+            Self::Command(command) => {
+                let args = command.args.join(" ");
+                format!("{} {args}", command.command)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
@@ -84,21 +138,21 @@ impl WorkflowGraph {
         let mut nodes = HashMap::new();
 
         for step in &workflow.steps {
-            if nodes.contains_key(&step.id) {
-                bail!("duplicate step id: {}", step.id);
+            if nodes.contains_key(&step.name) {
+                bail!("duplicate step name: {}", step.name);
             }
-            let index = graph.add_node(step.id.clone());
-            nodes.insert(step.id.clone(), index);
+            let index = graph.add_node(step.name.clone());
+            nodes.insert(step.name.clone(), index);
         }
 
         for step in &workflow.steps {
             let step_index = nodes
-                .get(&step.id)
+                .get(&step.name)
                 .copied()
                 .context("step node missing after graph initialization")?;
             for dependency in &step.depends_on {
                 let dependency_index = nodes.get(dependency).copied().with_context(|| {
-                    format!("unknown dependency {dependency} for step {}", step.id)
+                    format!("unknown dependency {dependency} for step {}", step.name)
                 })?;
                 graph.add_edge(dependency_index, step_index, ());
             }
@@ -136,20 +190,24 @@ mod tests {
     fn parses_yaml_and_orders_dependencies() {
         let workflow = WorkflowDefinition::from_yaml(
             r#"
-id: backup-db
+name: backup-db
 version: 1
 schema_version: 1
 failure_policy: continue
 concurrency:
   policy: queue
 steps:
-  - id: dump
+  - name: dump
     type: command
-    run: pg_dump app > backup.sql
-  - id: compress
+    run:
+      command: pg_dump
+      args: ["app"]
+  - name: compress
     type: command
     depends_on: [dump]
-    run: gzip backup.sql
+    run:
+      command: gzip
+      args: ["backup.sql"]
 "#,
         )
         .unwrap();
@@ -164,27 +222,53 @@ steps:
         );
         assert_eq!(graph.step_count(), 2);
         assert!(
-            ordered.iter().position(|id| id == "dump")
-                < ordered.iter().position(|id| id == "compress")
+            ordered.iter().position(|name| name == "dump")
+                < ordered.iter().position(|name| name == "compress")
         );
+    }
+
+    #[test]
+    fn parses_legacy_shell_run_for_compatibility() {
+        let workflow = WorkflowDefinition::from_yaml(
+            r#"
+name: legacy
+version: 1
+schema_version: 1
+steps:
+  - name: echo
+    type: command
+    run: echo hello
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            workflow.steps[0].run.as_ref().unwrap().command(),
+            "echo hello"
+        );
+        assert!(workflow.steps[0].run.as_ref().unwrap().is_legacy_shell());
     }
 
     #[test]
     fn rejects_cycles() {
         let workflow = WorkflowDefinition::from_yaml(
             r#"
-id: cyclic
+name: cyclic
 version: 1
 schema_version: 1
 steps:
-  - id: a
+  - name: a
     type: command
     depends_on: [b]
-    run: echo a
-  - id: b
+    run:
+      command: echo
+      args: ["a"]
+  - name: b
     type: command
     depends_on: [a]
-    run: echo b
+    run:
+      command: echo
+      args: ["b"]
 "#,
         )
         .unwrap();

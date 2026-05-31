@@ -26,8 +26,8 @@
       "additionalProperties": false,
       "properties": {
         "run_id":  { "type": "string", "format": "uuid" },
-        "step_id": { "type": "string" },
-        "job_id":  { "type": "string" }
+        "step_name": { "type": "string" },
+        "job_name":  { "type": "string" }
       }
     },
     "input":  { "type": "object", "description": "Plugin-defined input schema" },

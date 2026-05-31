@@ -11,7 +11,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RunRequest {
     pub run_id: Uuid,
-    pub job_id: String,
+    pub job_name: String,
     pub enqueued_at: DateTime<Utc>,
 }
 
@@ -38,7 +38,7 @@ pub enum DaemonState {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ActiveProcess {
     pub run_id: Uuid,
-    pub step_id: String,
+    pub step_name: String,
     pub pid: u32,
     pub command: String,
     pub started_at: DateTime<Utc>,
@@ -292,7 +292,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("runflow-daemon-{}", Uuid::new_v4()));
         let request = RunRequest {
             run_id: Uuid::new_v4(),
-            job_id: "demo".to_owned(),
+            job_name: "demo".to_owned(),
             enqueued_at: Utc::now(),
         };
 
@@ -311,7 +311,7 @@ mod tests {
         let run_id = Uuid::new_v4();
         let active = ActiveProcess {
             run_id,
-            step_id: "step".to_owned(),
+            step_name: "step".to_owned(),
             pid: 123,
             command: "echo hi".to_owned(),
             started_at: Utc::now(),

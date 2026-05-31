@@ -57,7 +57,7 @@
       "format": "uuid",
       "description": "Business-level grouping key"
     },
-    "step_id": {
+    "step_name": {
       "type": "string",
       "description": "Present on step/attempt/plugin events"
     },

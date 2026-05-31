@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use anyhow::{Context, Result, bail};
@@ -38,8 +39,17 @@ pub struct ManagedProcess {
     child: Child,
     pid: u32,
     command: String,
+    stdout_path: Option<PathBuf>,
+    stderr_path: Option<PathBuf>,
     run_id: Uuid,
-    step_id: Option<String>,
+    step_name: Option<String>,
+}
+
+pub struct ManagedProcessLogs {
+    pub stdout: File,
+    pub stderr: File,
+    pub stdout_path: PathBuf,
+    pub stderr_path: PathBuf,
 }
 
 #[derive(Debug, Default)]
@@ -65,7 +75,7 @@ impl ProcessSupervisor {
         command: &str,
         cwd: impl AsRef<Path>,
         run_id: Uuid,
-        step_id: Option<String>,
+        step_name: Option<String>,
     ) -> Result<(ManagedProcess, FlowEvent)> {
         let child = shell_command(command)
             .current_dir(cwd)
@@ -80,7 +90,7 @@ impl ProcessSupervisor {
         let started = process_event(
             EventType::ProcessStarted,
             run_id,
-            step_id.clone(),
+            step_name.clone(),
             json!({ "pid": pid, "command": command }),
         );
 
@@ -89,8 +99,55 @@ impl ProcessSupervisor {
                 child,
                 pid,
                 command: command.to_owned(),
+                stdout_path: None,
+                stderr_path: None,
                 run_id,
-                step_id,
+                step_name,
+            },
+            started,
+        ))
+    }
+
+    pub fn spawn_managed_run(
+        run: &crate::dag::RunDefinition,
+        cwd: impl AsRef<Path>,
+        run_id: Uuid,
+        step_name: Option<String>,
+        logs: ManagedProcessLogs,
+    ) -> Result<(ManagedProcess, FlowEvent)> {
+        let cwd = cwd.as_ref();
+        let mut command = run_command(run, cwd);
+        let child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(logs.stdout))
+            .stderr(Stdio::from(logs.stderr))
+            .spawn()
+            .with_context(|| format!("failed to spawn command: {}", run.display_command()))?;
+        let pid = child
+            .id()
+            .context("spawned process did not expose a process id")?;
+        let started = process_event(
+            EventType::ProcessStarted,
+            run_id,
+            step_name.clone(),
+            json!({
+                "pid": pid,
+                "command": run.command(),
+                "args": run.args(),
+                "working_directory": run.working_directory(),
+                "legacy_shell": run.is_legacy_shell()
+            }),
+        );
+
+        Ok((
+            ManagedProcess {
+                child,
+                pid,
+                command: run.display_command(),
+                stdout_path: Some(logs.stdout_path),
+                stderr_path: Some(logs.stderr_path),
+                run_id,
+                step_name,
             },
             started,
         ))
@@ -127,7 +184,7 @@ impl ProcessSupervisor {
 
     pub async fn kill_process_tree_events(
         run_id: Uuid,
-        step_id: Option<String>,
+        step_name: Option<String>,
         pid: u32,
         command: &str,
     ) -> Result<Vec<FlowEvent>> {
@@ -136,13 +193,13 @@ impl ProcessSupervisor {
             process_event(
                 EventType::ProcessKilled,
                 run_id,
-                step_id.clone(),
+                step_name.clone(),
                 json!({ "pid": pid, "command": command }),
             ),
             process_event(
                 EventType::ProcessTreeKilled,
                 run_id,
-                step_id,
+                step_name,
                 json!({ "root_pid": pid, "command": command }),
             ),
         ])
@@ -163,10 +220,27 @@ impl ManagedProcess {
         Ok(command_output(output, limits))
     }
 
+    pub async fn wait_logged(mut self, limits: CommandLimits) -> Result<CommandOutput> {
+        let status = self
+            .child
+            .wait()
+            .await
+            .with_context(|| format!("failed to wait for command: {}", self.command))?;
+        let stdout = read_limited(self.stdout_path.as_deref(), limits.stdout_max)?;
+        let stderr = read_limited(self.stderr_path.as_deref(), limits.stderr_max)?;
+        Ok(CommandOutput {
+            exit_code: status.code(),
+            stdout: stdout.0,
+            stderr: stderr.0,
+            stdout_truncated: stdout.1,
+            stderr_truncated: stderr.1,
+        })
+    }
+
     pub async fn kill_tree(&mut self) -> Result<Vec<FlowEvent>> {
         let events = ProcessSupervisor::kill_process_tree_events(
             self.run_id,
-            self.step_id.clone(),
+            self.step_name.clone(),
             self.pid,
             &self.command,
         )
@@ -190,6 +264,37 @@ fn shell_command(command: &str) -> Command {
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
         cmd
+    }
+}
+
+fn run_command(run: &crate::dag::RunDefinition, cwd: &Path) -> Command {
+    match run {
+        crate::dag::RunDefinition::LegacyShell(command) => {
+            let mut command = shell_command(command);
+            command.current_dir(cwd);
+            command
+        }
+        crate::dag::RunDefinition::Command(run) => {
+            let mut command = Command::new(&run.command);
+            command.args(&run.args);
+            command.current_dir(resolve_working_directory(
+                cwd,
+                run.working_directory.as_deref(),
+            ));
+            command
+        }
+    }
+}
+
+fn resolve_working_directory(cwd: &Path, working_directory: Option<&str>) -> PathBuf {
+    let Some(working_directory) = working_directory else {
+        return cwd.to_path_buf();
+    };
+    let path = Path::new(working_directory);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
     }
 }
 
@@ -242,14 +347,23 @@ fn command_output(output: std::process::Output, limits: CommandLimits) -> Comman
     }
 }
 
+fn read_limited(path: Option<&Path>, max: usize) -> Result<(String, bool)> {
+    let Some(path) = path else {
+        return Ok((String::new(), false));
+    };
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("failed to read command log {}", path.display()))?;
+    Ok(truncate_bytes(bytes, max))
+}
+
 fn process_event(
     event_type: EventType,
     run_id: Uuid,
-    step_id: Option<String>,
+    step_name: Option<String>,
     payload: serde_json::Value,
 ) -> FlowEvent {
     let mut event = FlowEvent::new(event_type, run_id, payload);
-    event.step_id = step_id;
+    event.step_name = step_name;
     event
 }
 

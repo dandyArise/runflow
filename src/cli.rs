@@ -13,6 +13,7 @@ use crate::daemon::{self, ActiveProcess, DaemonState, DaemonStatus, RunRequest};
 use crate::dag::{StepDefinition, StepType, WorkflowDefinition, WorkflowGraph};
 use crate::engine::{RetryPolicy, WorkflowEngine};
 use crate::events::{EventStore, EventType, FlowEvent};
+use crate::logs;
 use crate::manifest::write_run_manifest;
 use crate::packages::{
     build_package_from_workflow_file, read_package_or_legacy_workflow, write_package,
@@ -21,7 +22,7 @@ use crate::plugins::{PluginInput, PluginManifest, PluginRuntime, parse_manifest}
 use crate::retention::{RetentionPolicy, run_retention};
 use crate::schemas;
 use crate::state::{RunState, StateChangedPayload};
-use crate::supervisor::{CommandLimits, ProcessSupervisor};
+use crate::supervisor::{CommandLimits, ManagedProcessLogs, ProcessSupervisor};
 use crate::workspace::{RunWorkspace, WorkspaceIsolation};
 
 #[derive(Debug, Parser)]
@@ -57,7 +58,7 @@ enum Command {
         command: PackageCommand,
     },
     Test {
-        job_id: String,
+        job_name: String,
         #[arg(long)]
         verbose: bool,
     },
@@ -80,10 +81,27 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum JobCommand {
-    Add { workflow: PathBuf },
+    /// Add a job (upsert: creates or replaces if already exists)
+    Add {
+        workflow: PathBuf,
+    },
+    /// Update an existing job (error if not found)
+    Update {
+        workflow: PathBuf,
+    },
+    /// Delete a job by id
+    Delete {
+        job_name: String,
+    },
+    /// Delete all jobs
+    Clear,
     List,
-    Show { job_id: String },
-    Run { job_id: String },
+    Show {
+        job_name: String,
+    },
+    Run {
+        job_name: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -96,11 +114,11 @@ enum RunCommand {
 
 #[derive(Debug, Subcommand)]
 enum StepCommand {
-    Retry { run_id: Uuid, step_id: String },
-    Restart { run_id: Uuid, step_id: String },
-    Reset { run_id: Uuid, step_id: String },
-    Skip { run_id: Uuid, step_id: String },
-    RerunFrom { run_id: Uuid, step_id: String },
+    Retry { run_id: Uuid, step_name: String },
+    Restart { run_id: Uuid, step_name: String },
+    Reset { run_id: Uuid, step_name: String },
+    Skip { run_id: Uuid, step_name: String },
+    RerunFrom { run_id: Uuid, step_name: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -167,7 +185,7 @@ impl Cli {
             Command::Step { command } => run_step_command(&root, command),
             Command::Plugin { command } => run_plugin_command(&root, command).await,
             Command::Package { command } => run_package_command(&root, command),
-            Command::Test { job_id, verbose } => run_test_command(&root, &job_id, verbose),
+            Command::Test { job_name, verbose } => run_test_command(&root, &job_name, verbose),
             Command::Validate { workflow } => validate_workflow(&workflow),
             Command::Migrate { workflow } => {
                 validate_workflow(&workflow)?;
@@ -191,46 +209,84 @@ async fn run_job_command(root: &Path, command: JobCommand) -> Result<()> {
                 .with_context(|| format!("failed to read {}", workflow.display()))?;
             let definition = WorkflowDefinition::from_yaml(&source)?;
             fs::create_dir_all(jobs_dir(root)).context("failed to create jobs directory")?;
-            fs::write(job_path(root, &definition.id), source)
-                .with_context(|| format!("failed to store job {}", definition.id))?;
-            println!("job added: {}", definition.id);
-            Ok(())
-        }
-        JobCommand::List => {
-            for job_id in list_job_ids(root)? {
-                println!("{job_id}");
+            let path = job_path(root, &definition.name);
+            let exists = path.exists();
+            fs::write(&path, source)
+                .with_context(|| format!("failed to store job {}", definition.name))?;
+            if exists {
+                println!("job updated: {}", definition.name);
+            } else {
+                println!("job added: {}", definition.name);
             }
             Ok(())
         }
-        JobCommand::Show { job_id } => {
-            print!("{}", read_job_source(root, &job_id)?);
+        JobCommand::Update { workflow } => {
+            let source = fs::read_to_string(&workflow)
+                .with_context(|| format!("failed to read {}", workflow.display()))?;
+            let definition = WorkflowDefinition::from_yaml(&source)?;
+            let path = job_path(root, &definition.name);
+            if !path.exists() {
+                bail!("job not found: {}", definition.name);
+            }
+            fs::write(&path, source)
+                .with_context(|| format!("failed to update job {}", definition.name))?;
+            println!("job updated: {}", definition.name);
             Ok(())
         }
-        JobCommand::Run { job_id } => run_job(root, &job_id).await,
+        JobCommand::Delete { job_name } => {
+            let path = job_path(root, &job_name);
+            if !path.exists() {
+                bail!("job not found: {job_name}");
+            }
+            fs::remove_file(&path).with_context(|| format!("failed to delete job {job_name}"))?;
+            println!("job deleted: {job_name}");
+            Ok(())
+        }
+        JobCommand::Clear => {
+            let job_names = list_job_names(root)?;
+            let count = job_names.len();
+            for job_name in &job_names {
+                fs::remove_file(job_path(root, job_name))
+                    .with_context(|| format!("failed to delete job {job_name}"))?;
+            }
+            println!("jobs cleared: {count}");
+            Ok(())
+        }
+        JobCommand::List => {
+            for job_name in list_job_names(root)? {
+                println!("{job_name}");
+            }
+            Ok(())
+        }
+        JobCommand::Show { job_name } => {
+            print!("{}", read_job_source(root, &job_name)?);
+            Ok(())
+        }
+        JobCommand::Run { job_name } => run_job(root, &job_name).await,
     }
 }
 
-async fn run_job(root: &Path, job_id: &str) -> Result<()> {
+async fn run_job(root: &Path, job_name: &str) -> Result<()> {
     if daemon::is_daemon_running(root) {
-        let run_id = enqueue_job_run(root, job_id)?;
+        let run_id = enqueue_job_run(root, job_name)?;
         println!("{run_id}");
         return Ok(());
     }
 
     let run_id = Uuid::new_v4();
-    run_job_direct(root, job_id, run_id, RunState::Created, true, false).await?;
+    run_job_direct(root, job_name, run_id, RunState::Created, true, false).await?;
     println!("{run_id}");
     Ok(())
 }
 
-fn enqueue_job_run(root: &Path, job_id: &str) -> Result<Uuid> {
-    read_job_source(root, job_id)?;
+fn enqueue_job_run(root: &Path, job_name: &str) -> Result<Uuid> {
+    read_job_source(root, job_name)?;
     let run_id = Uuid::new_v4();
     let event_store = EventStore::new(root);
     event_store.append(&FlowEvent::new(
         EventType::RunCreated,
         run_id,
-        json!({ "job_id": job_id, "source": "daemon_queue" }),
+        json!({ "job_name": job_name, "source": "daemon_queue" }),
     ))?;
     event_store.append(&FlowEvent::new(
         EventType::StateChanged,
@@ -244,7 +300,7 @@ fn enqueue_job_run(root: &Path, job_id: &str) -> Result<Uuid> {
         root,
         &RunRequest {
             run_id,
-            job_id: job_id.to_owned(),
+            job_name: job_name.to_owned(),
             enqueued_at: Utc::now(),
         },
     )?;
@@ -253,24 +309,25 @@ fn enqueue_job_run(root: &Path, job_id: &str) -> Result<Uuid> {
 
 async fn run_job_direct(
     root: &Path,
-    job_id: &str,
+    job_name: &str,
     run_id: Uuid,
     from_state: RunState,
     create_event: bool,
     daemon_mode: bool,
 ) -> Result<RunState> {
-    let source = read_job_source(root, job_id)?;
+    let source = read_job_source(root, job_name)?;
     let workflow = WorkflowDefinition::from_yaml(&source)?;
     let graph = WorkflowGraph::build(&workflow)?;
     let started_at = Utc::now();
     let event_store = EventStore::new(root);
     let workspace = WorkspaceIsolation::new(root).create(run_id)?;
+    let mut workflow_log = logs::write_workflow_started(root, run_id, &workflow, started_at)?;
 
     if create_event {
         event_store.append(&FlowEvent::new(
             EventType::RunCreated,
             run_id,
-            json!({ "job_id": job_id }),
+            json!({ "job_name": job_name }),
         ))?;
     }
     event_store.append(&FlowEvent::new(
@@ -284,13 +341,14 @@ async fn run_job_direct(
     event_store.append(&FlowEvent::new(
         EventType::RunStarted,
         run_id,
-        json!({ "job_id": job_id }),
+        json!({ "job_name": job_name }),
     ))?;
 
     let mut status = RunState::Success;
     let mut failed_step_count = 0;
+    let mut successful_step_count = 0;
     let ordered = graph.ordered_steps()?;
-    for step_id in ordered {
+    for step_name in ordered {
         if daemon_mode && daemon::cancel_requested(root, run_id) {
             status = RunState::Cancelled;
             break;
@@ -298,7 +356,7 @@ async fn run_job_direct(
         let step = workflow
             .steps
             .iter()
-            .find(|step| step.id == step_id)
+            .find(|step| step.name == step_name)
             .context("ordered step missing from workflow")?;
         match execute_step_for_run(root, run_id, step, &workspace, daemon_mode).await {
             Ok((_outcome, events)) => {
@@ -312,8 +370,9 @@ async fn run_job_direct(
                 event_store.append(&FlowEvent::new(
                     EventType::StepFinished,
                     run_id,
-                    json!({ "step_id": step.id }),
+                    json!({ "step_name": step.name }),
                 ))?;
+                successful_step_count += 1;
             }
             Err(error) => {
                 if daemon_mode && daemon::cancel_requested(root, run_id) {
@@ -323,7 +382,7 @@ async fn run_job_direct(
                 event_store.append(&FlowEvent::new(
                     EventType::StepFailed,
                     run_id,
-                    json!({ "step_id": step.id, "error": error.to_string() }),
+                    json!({ "step_name": step.name, "error": error.to_string() }),
                 ))?;
                 failed_step_count += 1;
                 status = RunState::Failed;
@@ -354,6 +413,16 @@ async fn run_job_direct(
         status,
         failed_step_count,
     )?;
+    workflow_log = logs::write_workflow_finished(
+        root,
+        run_id,
+        workflow_log,
+        Utc::now(),
+        status,
+        successful_step_count,
+        failed_step_count as usize,
+    )?;
+    print_run_summary(root, run_id, &workflow_log, status)?;
 
     if daemon_mode {
         daemon::clear_cancel(root, run_id)?;
@@ -369,30 +438,55 @@ async fn execute_step_for_run(
     daemon_mode: bool,
 ) -> Result<(crate::engine::StepOutcome, Vec<FlowEvent>)> {
     if daemon_mode && step.step_type == StepType::Command {
-        let command = step.run.as_deref().context("command step missing run")?;
-        let (process, started) = ProcessSupervisor::spawn_managed(
-            command,
+        let run = step.run.as_ref().context("command step missing run")?;
+        let mut prepared = logs::prepare_step_logs(
+            root,
+            run_id,
+            &step.name,
+            run,
+            run.working_directory().map(str::to_owned),
+            Utc::now(),
+        )?;
+        let stderr_path = prepared.stderr_path.clone();
+        let (stdout_file, stderr_file) = prepared.take_stdio()?;
+        let (process, started) = match ProcessSupervisor::spawn_managed_run(
+            run,
             &workspace.work_dir,
             run_id,
-            Some(step.id.clone()),
-        )?;
+            Some(step.name.clone()),
+            ManagedProcessLogs {
+                stdout: stdout_file,
+                stderr: stderr_file,
+                stdout_path: prepared.stdout_path.clone(),
+                stderr_path: prepared.stderr_path.clone(),
+            },
+        ) {
+            Ok(result) => result,
+            Err(error) => {
+                let error = format!("{error:#}");
+                logs::write_spawn_error(&stderr_path, &error)?;
+                logs::write_step_finished(prepared, Utc::now(), None, Some(error.clone()))?;
+                bail!("command step {} failed to spawn: {error}", step.name);
+            }
+        };
         daemon::write_active_process(
             root,
             &ActiveProcess {
                 run_id,
-                step_id: step.id.clone(),
+                step_name: step.name.clone(),
                 pid: process.pid(),
-                command: command.to_owned(),
+                command: run.display_command(),
                 started_at: Utc::now(),
             },
         )?;
-        let output = process.wait(CommandLimits::default()).await;
+        let output = process.wait_logged(CommandLimits::default()).await;
         daemon::clear_active_process(root, run_id)?;
         let output = output?;
+        logs::write_step_finished(prepared, Utc::now(), output.exit_code, None)?;
         if output.exit_code != Some(0) {
             bail!(
                 "command step {} failed with {:?}",
-                step.id,
+                step.name,
                 output.exit_code
             );
         }
@@ -402,11 +496,78 @@ async fn execute_step_for_run(
     WorkflowEngine::execute_step_with_events(step, workspace, RetryPolicy::default()).await
 }
 
+fn print_run_summary(
+    root: &Path,
+    run_id: Uuid,
+    workflow_log: &logs::WorkflowLogMetadata,
+    status: RunState,
+) -> Result<()> {
+    if status == RunState::Success {
+        return Ok(());
+    }
+    println!("Workflow: {}", workflow_log.workflow_name);
+    println!("Status: {:?}", status);
+    println!("Log dir: {}", workflow_log.log_dir);
+
+    let workflow_log_dir = logs::workflow_log_dir(root, run_id);
+    let mut failed_steps = Vec::new();
+    for entry in fs::read_dir(&workflow_log_dir)
+        .with_context(|| format!("failed to read log dir {}", workflow_log_dir.display()))?
+    {
+        let path = entry?.path().join("step.metadata.json");
+        if !path.exists() {
+            continue;
+        }
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read step metadata {}", path.display()))?;
+        let value: serde_json::Value = serde_json::from_str(&source)
+            .with_context(|| format!("failed to parse step metadata {}", path.display()))?;
+        if value.get("status").and_then(|value| value.as_str()) == Some("FAILED") {
+            failed_steps.push(value);
+        }
+    }
+
+    if !failed_steps.is_empty() {
+        println!();
+        println!("Failed steps:");
+        for step in failed_steps {
+            let step_name = step
+                .get("step_id")
+                .and_then(|value| value.as_str())
+                .unwrap_or("unknown");
+            let step_dir = format!("{}/{step_name}", workflow_log.log_dir);
+            println!("- {step_name}");
+            if let Some(command) = step.get("command").and_then(|value| value.as_str()) {
+                println!("  Command: {command}");
+            }
+            if let Some(args) = step.get("args") {
+                println!("  Args: {args}");
+            }
+            if let Some(exit_code) = step.get("exit_code") {
+                println!("  Exit code: {exit_code}");
+            }
+            if let Some(spawn_error) = step.get("spawn_error").and_then(|value| value.as_str()) {
+                println!("  Spawn error: {spawn_error}");
+            }
+            println!("  Stdout: {step_dir}/stdout.log");
+            println!("  Stderr: {step_dir}/stderr.log");
+        }
+    }
+    Ok(())
+}
+
 async fn run_run_command(root: &Path, command: RunCommand) -> Result<()> {
     match command {
         RunCommand::List => {
-            for run_id in list_run_ids(root)? {
-                println!("{run_id}");
+            let store = EventStore::new(root);
+            for run_id_str in list_run_ids(root)? {
+                let run_id: Uuid = run_id_str.parse()?;
+                let (state, job_name) = resolve_run_state(&store, run_id);
+                if let Some(name) = job_name {
+                    println!("{run_id_str}  {state:<9} ({name})");
+                } else {
+                    println!("{run_id_str}  {state}");
+                }
             }
             Ok(())
         }
@@ -424,13 +585,23 @@ async fn run_run_command(root: &Path, command: RunCommand) -> Result<()> {
 }
 
 async fn cancel_run(root: &Path, run_id: Uuid) -> Result<()> {
-    daemon::request_cancel(root, run_id)?;
     let store = EventStore::new(root);
+
+    // Guard: refuse to cancel a run that already reached a terminal state.
+    let (current_state, _) = resolve_run_state(&store, run_id);
+    match current_state.as_str() {
+        "SUCCESS" | "FAILED" | "CANCELLED" | "TIMEOUT" | "SKIPPED" => {
+            bail!("run is already {current_state}: {run_id}");
+        }
+        _ => {}
+    }
+
+    daemon::request_cancel(root, run_id)?;
 
     if let Some(active) = daemon::read_active_process(root, run_id)? {
         for event in ProcessSupervisor::kill_process_tree_events(
             run_id,
-            Some(active.step_id),
+            Some(active.step_name),
             active.pid,
             &active.command,
         )
@@ -470,18 +641,42 @@ async fn cancel_run(root: &Path, run_id: Uuid) -> Result<()> {
     Ok(())
 }
 
+/// Replay the StateChanged events for a run and return its current state label and job_name.
+/// Returns ("UNKNOWN", None) if no state events are found (e.g. no events file yet).
+fn resolve_run_state(store: &EventStore, run_id: Uuid) -> (String, Option<String>) {
+    use crate::events::EventType;
+    let events = match store.read_run(run_id) {
+        Ok(events) => events,
+        Err(_) => return ("UNKNOWN".to_owned(), None),
+    };
+    let mut state = "UNKNOWN".to_owned();
+    let mut job_name = None;
+    for event in &events {
+        if event.event_type == EventType::StateChanged {
+            if let Some(to) = event.payload.get("to").and_then(|v| v.as_str()) {
+                state = to.to_owned();
+            }
+        } else if event.event_type == EventType::RunCreated
+            && let Some(name) = event.payload.get("job_name").and_then(|v| v.as_str())
+        {
+            job_name = Some(name.to_owned());
+        }
+    }
+    (state, job_name)
+}
+
 fn run_step_command(root: &Path, command: StepCommand) -> Result<()> {
-    let (run_id, step_id, action) = match command {
-        StepCommand::Retry { run_id, step_id } => (run_id, step_id, "retry"),
-        StepCommand::Restart { run_id, step_id } => (run_id, step_id, "restart"),
-        StepCommand::Reset { run_id, step_id } => (run_id, step_id, "reset"),
-        StepCommand::Skip { run_id, step_id } => (run_id, step_id, "skip"),
-        StepCommand::RerunFrom { run_id, step_id } => (run_id, step_id, "rerun-from"),
+    let (run_id, step_name, action) = match command {
+        StepCommand::Retry { run_id, step_name } => (run_id, step_name, "retry"),
+        StepCommand::Restart { run_id, step_name } => (run_id, step_name, "restart"),
+        StepCommand::Reset { run_id, step_name } => (run_id, step_name, "reset"),
+        StepCommand::Skip { run_id, step_name } => (run_id, step_name, "skip"),
+        StepCommand::RerunFrom { run_id, step_name } => (run_id, step_name, "rerun-from"),
     };
     EventStore::new(root).append(&FlowEvent::new(
         EventType::ManualRestart,
         run_id,
-        json!({ "step_id": step_id, "action": action }),
+        json!({ "step_name": step_name, "action": action }),
     ))?;
     println!("step action recorded: {action}");
     Ok(())
@@ -560,7 +755,7 @@ fn run_package_command(root: &Path, command: PackageCommand) -> Result<()> {
         PackageCommand::Build { workflow } => {
             let package_data = build_package_from_workflow_file(&workflow)?;
             let package_dir = root.join(".flow").join("packages");
-            let package = package_dir.join(format!("{}.flowpkg", package_data.job_id));
+            let package = package_dir.join(format!("{}.flowpkg", package_data.job_name));
             write_package(&package_data, &package)?;
             println!("{}", package.display());
             Ok(())
@@ -568,25 +763,28 @@ fn run_package_command(root: &Path, command: PackageCommand) -> Result<()> {
         PackageCommand::Install { package } => {
             let (package_data, legacy) = read_package_or_legacy_workflow(&package)?;
             fs::create_dir_all(jobs_dir(root))?;
-            fs::write(job_path(root, &package_data.job_id), package_data.workflow)?;
+            fs::write(
+                job_path(root, &package_data.job_name),
+                package_data.workflow,
+            )?;
             if legacy {
-                println!("legacy package installed: {}", package_data.job_id);
+                println!("legacy package installed: {}", package_data.job_name);
             } else {
-                println!("package installed: {}", package_data.job_id);
+                println!("package installed: {}", package_data.job_name);
             }
             Ok(())
         }
     }
 }
 
-fn run_test_command(root: &Path, job_id: &str, verbose: bool) -> Result<()> {
-    let source = read_job_source(root, job_id)?;
+fn run_test_command(root: &Path, job_name: &str, verbose: bool) -> Result<()> {
+    let source = read_job_source(root, job_name)?;
     let workflow = WorkflowDefinition::from_yaml(&source)?;
     WorkflowGraph::build(&workflow)?;
     if verbose {
         println!("steps: {}", workflow.steps.len());
     }
-    println!("test passed: {job_id}");
+    println!("test passed: {job_name}");
     Ok(())
 }
 
@@ -645,7 +843,7 @@ async fn serve_daemon(root: &Path) -> Result<()> {
                 write_daemon_status(root, started_at, DaemonState::Running, Some(request.run_id))?;
                 let _ = run_job_direct(
                     root,
-                    &request.job_id,
+                    &request.job_name,
                     request.run_id,
                     RunState::Queued,
                     false,
@@ -748,7 +946,7 @@ fn validate_workflow(workflow: &Path) -> Result<()> {
     }
 }
 
-fn list_job_ids(root: &Path) -> Result<Vec<String>> {
+fn list_job_names(root: &Path) -> Result<Vec<String>> {
     list_file_stems(&jobs_dir(root), "yml")
 }
 
@@ -785,16 +983,17 @@ fn list_file_stems(dir: &Path, extension: &str) -> Result<Vec<String>> {
     Ok(ids)
 }
 
-fn read_job_source(root: &Path, job_id: &str) -> Result<String> {
-    fs::read_to_string(job_path(root, job_id)).with_context(|| format!("job not found: {job_id}"))
+fn read_job_source(root: &Path, job_name: &str) -> Result<String> {
+    fs::read_to_string(job_path(root, job_name))
+        .with_context(|| format!("job not found: {job_name}"))
 }
 
 fn jobs_dir(root: &Path) -> PathBuf {
     root.join(".flow").join("jobs")
 }
 
-fn job_path(root: &Path, job_id: &str) -> PathBuf {
-    jobs_dir(root).join(format!("{job_id}.yml"))
+fn job_path(root: &Path, job_name: &str) -> PathBuf {
+    jobs_dir(root).join(format!("{job_name}.yml"))
 }
 
 fn plugin_manifest(language: PluginLanguage) -> Result<String> {
@@ -822,7 +1021,17 @@ mod tests {
     fn parses_all_top_level_commands() {
         for args in [
             vec!["flow", "job", "list"],
+            vec!["flow", "job", "add", "workflow.yml"],
+            vec!["flow", "job", "update", "workflow.yml"],
+            vec!["flow", "job", "delete", "ping-demo"],
+            vec!["flow", "job", "clear"],
             vec!["flow", "run", "list"],
+            vec![
+                "flow",
+                "run",
+                "cancel",
+                "00000000-0000-0000-0000-000000000000",
+            ],
             vec![
                 "flow",
                 "step",
@@ -851,13 +1060,15 @@ mod tests {
         fs::write(
             &workflow,
             r#"
-id: hello
+name: hello
 version: 1
 schema_version: 1
 steps:
-  - id: echo
+  - name: echo
     type: command
-    run: echo hello
+    run:
+      command: echo
+      args: ["hello"]
 "#,
         )
         .unwrap();
@@ -887,7 +1098,7 @@ steps:
         .await
         .unwrap();
 
-        assert_eq!(list_job_ids(&root).unwrap(), vec!["hello".to_owned()]);
+        assert_eq!(list_job_names(&root).unwrap(), vec!["hello".to_owned()]);
         let runs = list_run_ids(&root).unwrap();
         assert_eq!(runs.len(), 1);
         assert!(

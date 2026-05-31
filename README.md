@@ -7,6 +7,8 @@ It currently supports:
 - validating YAML workflows;
 - registering and running jobs;
 - creating an isolated workspace per run;
+- capturing command stdout/stderr without shell redirection;
+- writing workflow and step log metadata;
 - writing run events as JSONL;
 - writing completion manifests for finished runs;
 - listing runs and reading run logs;
@@ -78,13 +80,15 @@ cargo run -- --root . version
 Create `workflow.yml`:
 
 ```yaml
-id: demo
+name: demo
 version: 1
 schema_version: 1
 steps:
-  - id: hello
+  - name: hello
     type: command
-    run: echo hello
+    run:
+      command: echo
+      args: ["hello"]
 ```
 
 Validate it:
@@ -129,9 +133,13 @@ Each completed run also writes:
 
 ```text
 .flow/runs/<run_id>/manifest.json
+logs/<run_id>/workflow.metadata.json
+logs/<run_id>/<step_name>/step.metadata.json
+logs/<run_id>/<step_name>/stdout.log
+logs/<run_id>/<step_name>/stderr.log
 ```
 
-The manifest includes workflow versions, timestamps, final status, failure policy, artifacts, and basic metrics.
+RunFlow captures stdout and stderr itself with Rust. Recommended workflows do not need `cmd`, `powershell`, `bash`, `>`, `2>&1`, or pipes just to produce logs.
 
 ## Workspace Root
 
@@ -154,6 +162,11 @@ RunFlow stores internal data in:
     <run_id>/manifest.json
   packages/
   plugins/
+logs/
+  <run_id>/workflow.metadata.json
+  <run_id>/<step_name>/stdout.log
+  <run_id>/<step_name>/stderr.log
+  <run_id>/<step_name>/step.metadata.json
 ```
 
 The `.flow/` directory is ignored by Git.
@@ -179,9 +192,12 @@ flow migrate .\workflow.yml
 
 ```powershell
 flow job add .\workflow.yml
+flow job update .\workflow.yml
+flow job delete <job_name>
+flow job clear
 flow job list
-flow job show <job_id>
-flow job run <job_id>
+flow job show <job_name>
+flow job run <job_name>
 ```
 
 ### Runs
@@ -198,18 +214,18 @@ flow run cancel <run_id>
 These commands record a manual action in the run event log.
 
 ```powershell
-flow step retry <run_id> <step_id>
-flow step restart <run_id> <step_id>
-flow step reset <run_id> <step_id>
-flow step skip <run_id> <step_id>
-flow step rerun-from <run_id> <step_id>
+flow step retry <run_id> <step_name>
+flow step restart <run_id> <step_name>
+flow step reset <run_id> <step_name>
+flow step skip <run_id> <step_name>
+flow step rerun-from <run_id> <step_name>
 ```
 
 ### Job Test
 
 ```powershell
-flow test <job_id>
-flow test <job_id> --verbose
+flow test <job_name>
+flow test <job_name> --verbose
 ```
 
 ### Plugins
@@ -256,7 +272,7 @@ Install a package:
 flow package install .\.flow\packages\demo.flowpkg
 ```
 
-`.flowpkg` files are JSON packages containing the package format version, job id, workflow versions, the workflow YAML, and a deterministic workflow checksum. Installing still accepts legacy `.flowpkg` files that contain only workflow YAML.
+`.flowpkg` files are JSON packages containing the package format version, job name, workflow versions, the workflow YAML, and a deterministic workflow checksum. Installing still accepts legacy `.flowpkg` files that contain only workflow YAML.
 
 ### Daemon
 
@@ -267,7 +283,7 @@ flow daemon stop
 flow daemon restart
 ```
 
-When the daemon is running, `flow job run <job_id>` enqueues the run instead of executing it in the foreground. The daemon processes the queue, exposes JSON status with heartbeat, active run and queue size, and supports clean stop/restart requests.
+When the daemon is running, `flow job run <job_name>` enqueues the run instead of executing it in the foreground. The daemon processes the queue, exposes JSON status with heartbeat, active run and queue size, and supports clean stop/restart requests.
 
 `flow run cancel <run_id>` cancels queued runs directly. For an active daemon run, it records a cancel marker, kills the tracked process tree, writes `PROCESS_KILLED` / `PROCESS_TREE_KILLED`, and the daemon finishes the run as `CANCELLED`.
 
@@ -284,13 +300,50 @@ Retention scans `.flow/runs`, keeps the newest runs according to `--keep-runs`, 
 ## Minimal Workflow Format
 
 ```yaml
-id: backup-db
+name: backup-db
 version: 1
 schema_version: 1
 steps:
-  - id: dump
+  - name: dump
     type: command
-    run: echo backup
+    run:
+      command: echo
+      args: ["backup"]
+```
+
+Preferred command steps use `run.command` plus a separate string per argument:
+
+```yaml
+name: network-check
+version: 1
+schema_version: 1
+steps:
+  - name: ping_google
+    type: command
+    run:
+      command: ping
+      args: ["-n", "4", "google.com"]
+```
+
+Shells remain supported for advanced, platform-specific steps, but RunFlow still captures its own logs:
+
+```yaml
+steps:
+  - name: list_directory_windows
+    type: command
+    run:
+      command: cmd
+      args: ["/C", "dir"]
+```
+
+Shell steps are marked with `is_shell: true` and a portability warning in `step.metadata.json`.
+
+Avoid this in recommended examples:
+
+```yaml
+run:
+  command: cmd
+  args: ["/C", "ping -n 4 google.com > ping.log 2>&1"]
 ```
 
 Supported step types in the current engine:
@@ -303,11 +356,11 @@ Supported step types in the current engine:
 Example `sleep` step:
 
 ```yaml
-id: wait-demo
+name: wait-demo
 version: 1
 schema_version: 1
 steps:
-  - id: pause
+  - name: pause
     type: sleep
     duration: 1s
 ```

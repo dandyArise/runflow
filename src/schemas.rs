@@ -86,13 +86,15 @@ mod tests {
     fn validates_minimal_workflow_yaml() {
         let diagnostics = validate_workflow_yaml(
             r#"
-id: backup-db
+name: backup-db
 version: 1
 schema_version: 1
 steps:
-  - id: dump
+  - name: dump
     type: command
-    run: pg_dump app > backup.sql
+    run:
+      command: rustc
+      args: ["--version"]
 "#,
         )
         .expect("workflow validation should run");
@@ -104,7 +106,7 @@ steps:
     fn reports_structured_workflow_errors() {
         let diagnostics = validate_workflow_yaml(
             r#"
-id: Bad Name
+name: Bad Name
 version: 0
 schema_version: 1
 steps: []
@@ -112,7 +114,7 @@ steps: []
         )
         .expect("workflow validation should run");
 
-        assert!(diagnostics.iter().any(|item| item.path == "/id"));
+        assert!(diagnostics.iter().any(|item| item.path == "/name"));
         assert!(diagnostics.iter().any(|item| item.path == "/version"));
         assert!(diagnostics.iter().any(|item| item.path == "/steps"));
     }

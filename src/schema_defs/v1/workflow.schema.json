@@ -4,10 +4,10 @@
   "title": "FlowRun Workflow",
   "description": "Schema for FlowRun workflow YAML files (parsed to JSON for validation)",
   "type": "object",
-  "required": ["id", "version", "schema_version", "steps"],
+  "required": ["name", "version", "schema_version", "steps"],
   "additionalProperties": false,
   "properties": {
-    "id": {
+    "name": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
       "description": "Unique job identifier, kebab-case"
@@ -98,13 +98,18 @@
   "$defs": {
     "step": {
       "type": "object",
-      "required": ["id", "type"],
+      "required": ["name", "type"],
       "additionalProperties": false,
       "properties": {
-        "id":          { "type": "string", "pattern": "^[a-z0-9][a-z0-9-_]*$" },
+        "name":          { "type": "string", "pattern": "^[a-z0-9][a-z0-9-_]*$" },
         "type":        { "type": "string", "enum": ["command", "plugin", "sleep", "wait_until"] },
         "depends_on":  { "type": "array", "items": { "type": "string" } },
-        "run":         { "type": "string" },
+        "run":         {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/$defs/run_command" }
+          ]
+        },
         "env":         { "type": "object", "additionalProperties": { "type": "string" } },
         "timeout":     { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
         "plugin_id":   { "type": "string" },
@@ -119,6 +124,20 @@
         "on_failure":  { "$ref": "#/$defs/hook" },
         "on_timeout":  { "$ref": "#/$defs/hook" },
         "finally":     { "$ref": "#/$defs/hook" }
+      }
+    },
+    "run_command": {
+      "type": "object",
+      "required": ["command"],
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "working_directory": { "type": "string" }
       }
     },
     "retry_policy": {

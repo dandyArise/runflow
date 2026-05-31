@@ -36,7 +36,7 @@
         },
         "steps": {
           "type": "object",
-          "description": "Map of step_id to step state",
+          "description": "Map of step_name to step state",
           "additionalProperties": {
             "type": "object",
             "required": ["status", "attempt"],

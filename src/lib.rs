@@ -5,6 +5,7 @@ pub mod dag;
 pub mod engine;
 pub mod events;
 pub mod locks;
+pub mod logs;
 pub mod manifest;
 pub mod packages;
 pub mod plugins;

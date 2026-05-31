@@ -39,9 +39,9 @@ pub struct PluginInput {
 pub struct PluginFlowContext {
     pub run_id: Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub step_id: Option<String>,
+    pub step_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub job_id: Option<String>,
+    pub job_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -214,8 +214,8 @@ mod tests {
             },
             flow: PluginFlowContext {
                 run_id: Uuid::new_v4(),
-                step_id: Some("step".to_owned()),
-                job_id: None,
+                step_name: Some("step".to_owned()),
+                job_name: None,
             },
             input: serde_json::json!({}),
             env: HashMap::new(),
@@ -232,6 +232,6 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        assert!(value["flow"].get("job_id").is_none());
+        assert!(value["flow"].get("job_name").is_none());
     }
 }

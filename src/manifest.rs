@@ -15,7 +15,7 @@ pub struct RunManifest {
     pub workflow_version: String,
     pub schema_version: String,
     pub run_id: Uuid,
-    pub job_id: String,
+    pub job_name: String,
     pub started_at: DateTime<Utc>,
     pub ended_at: DateTime<Utc>,
     pub status: ManifestStatus,
@@ -35,7 +35,7 @@ pub enum ManifestStatus {
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ManifestArtifact {
-    pub step_id: String,
+    pub step_name: String,
     pub path: String,
     pub size_bytes: u64,
 }
@@ -101,7 +101,7 @@ fn build_run_manifest(
         workflow_version: workflow.version.to_string(),
         schema_version: workflow.schema_version.to_string(),
         run_id,
-        job_id: workflow.id.clone(),
+        job_name: workflow.name.clone(),
         started_at,
         ended_at,
         status,
@@ -156,14 +156,16 @@ mod tests {
         let root = std::env::temp_dir().join(format!("runflow-manifest-{}", Uuid::new_v4()));
         let workflow = WorkflowDefinition::from_yaml(
             r#"
-id: manifest-demo
+name: manifest-demo
 version: 2
 schema_version: 1
 failure_policy: continue
 steps:
-  - id: hello
+  - name: hello
     type: command
-    run: echo hello
+    run:
+      command: echo
+      args: ["hello"]
 "#,
         )
         .unwrap();
@@ -184,7 +186,7 @@ steps:
         let read = read_run_manifest(root.join("manifest.json")).unwrap();
 
         assert_eq!(read, manifest);
-        assert_eq!(read.job_id, "manifest-demo");
+        assert_eq!(read.job_name, "manifest-demo");
         assert_eq!(read.metrics.workflow_duration_ms, 42);
         assert_eq!(read.failure_policy, "continue");
 

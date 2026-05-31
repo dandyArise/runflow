@@ -36,7 +36,7 @@ impl SqliteProjectionStore {
             .execute_batch(
                 r#"
 CREATE TABLE IF NOT EXISTS jobs (
-    job_id TEXT PRIMARY KEY,
+    job_name TEXT PRIMARY KEY,
     workflow_version TEXT,
     schema_version TEXT,
     created_at TEXT NOT NULL
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
-    job_id TEXT,
+    job_name TEXT,
     state TEXT NOT NULL,
     started_at TEXT,
     ended_at TEXT,
@@ -53,19 +53,19 @@ CREATE TABLE IF NOT EXISTS runs (
 
 CREATE TABLE IF NOT EXISTS steps (
     run_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
+    step_name TEXT NOT NULL,
     state TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    PRIMARY KEY (run_id, step_id)
+    PRIMARY KEY (run_id, step_name)
 );
 
 CREATE TABLE IF NOT EXISTS attempts (
     run_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
+    step_name TEXT NOT NULL,
     attempt INTEGER NOT NULL,
     state TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    PRIMARY KEY (run_id, step_id, attempt)
+    PRIMARY KEY (run_id, step_name, attempt)
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS events (
     event_version INTEGER NOT NULL,
     timestamp TEXT NOT NULL,
     run_id TEXT NOT NULL,
-    step_id TEXT,
+    step_name TEXT,
     attempt INTEGER,
     payload TEXT NOT NULL
 );
@@ -89,11 +89,11 @@ CREATE TABLE IF NOT EXISTS metrics (
 
 CREATE TABLE IF NOT EXISTS artifacts (
     run_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
+    step_name TEXT NOT NULL,
     path TEXT NOT NULL,
     size_bytes INTEGER,
     created_at TEXT NOT NULL,
-    PRIMARY KEY (run_id, step_id, path)
+    PRIMARY KEY (run_id, step_name, path)
 );
 
 CREATE TABLE IF NOT EXISTS locks (
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS plugins (
         tx.execute(
             r#"
 INSERT OR IGNORE INTO events (
-    event_id, event_type, event_version, timestamp, run_id, step_id, attempt, payload
+    event_id, event_type, event_version, timestamp, run_id, step_name, attempt, payload
 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 "#,
             params![
@@ -149,7 +149,7 @@ INSERT OR IGNORE INTO events (
                 event.event_version,
                 event.timestamp.to_rfc3339(),
                 event.run_id.to_string(),
-                event.step_id.as_deref(),
+                event.step_name.as_deref(),
                 event.attempt,
                 serde_json::to_string(&event.payload)?,
             ],

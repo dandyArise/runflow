@@ -56,7 +56,7 @@ pub struct FlowEvent {
     pub span_id: Uuid,
     pub correlation_id: Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub step_id: Option<String>,
+    pub step_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attempt: Option<u32>,
     pub payload: Value,
@@ -75,14 +75,14 @@ impl FlowEvent {
             trace_id,
             span_id: Uuid::new_v4(),
             correlation_id: trace_id,
-            step_id: None,
+            step_name: None,
             attempt: None,
             payload,
         }
     }
 
-    pub fn with_step(mut self, step_id: impl Into<String>) -> Self {
-        self.step_id = Some(step_id.into());
+    pub fn with_step(mut self, step_name: impl Into<String>) -> Self {
+        self.step_name = Some(step_name.into());
         self
     }
 

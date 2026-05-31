@@ -11,6 +11,7 @@ pub struct WorkspaceIsolation {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RunWorkspace {
+    pub root_dir: PathBuf,
     pub run_id: Uuid,
     pub run_dir: PathBuf,
     pub work_dir: PathBuf,
@@ -32,6 +33,7 @@ impl WorkspaceIsolation {
             .with_context(|| format!("failed to create workspace {}", work_dir.display()))?;
 
         Ok(RunWorkspace {
+            root_dir: self.root.clone(),
             run_id,
             run_dir,
             work_dir,

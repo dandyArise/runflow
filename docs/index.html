@@ -808,7 +808,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="step">
       <div class="step-num">01</div>
       <h3 data-fr="Définis ton workflow" data-en="Define your workflow">Définis ton workflow</h3>
-      <p data-fr="Crée un fichier workflow.yml avec un id, une version et une liste de steps. Valide-le en une commande." data-en="Create a workflow.yml with an id, a version, and a list of steps. Validate it in one command.">Crée un fichier workflow.yml avec un id, une version et une liste de steps. Valide-le en une commande.</p>
+      <p data-fr="Crée un fichier workflow.yml avec un name, une version et une liste de steps. Valide-le en une commande." data-en="Create a workflow.yml with a name, a version, and a list of steps. Validate it in one command.">Crée un fichier workflow.yml avec un name, une version et une liste de steps. Valide-le en une commande.</p>
       <div class="step-code"><span class="tprompt">$ </span>flow validate workflow.yml</div>
     </div>
     <div class="step">
@@ -882,7 +882,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
 
   <div class="yaml-grid reveal">
     <div>
-      <p class="s-desc" style="margin-bottom:1.4rem" data-fr="Un workflow RunFlow se définit avec un id, une version et une liste de steps. Chaque step a un type qui détermine son comportement." data-en="A RunFlow workflow is defined with an id, a version, and a list of steps. Each step has a type that drives its behavior.">Un workflow se définit avec un id, une version et une liste de steps. Chaque step a un type.</p>
+      <p class="s-desc" style="margin-bottom:1.4rem" data-fr="Un workflow RunFlow se définit avec un name, une version et une liste de steps. Chaque step a un type qui détermine son comportement." data-en="A RunFlow workflow is defined with a name, a version, and a list of steps. Each step has a type that drives its behavior.">Un workflow se définit avec un name, une version et une liste de steps. Chaque step a un type.</p>
       <p style="font-size:.8rem;color:var(--text-dim);margin-bottom:.8rem" data-fr="Types de steps supportés :" data-en="Supported step types:">Types de steps supportés :</p>
       <div class="step-types">
         <span class="step-tag">command</span>
@@ -897,22 +897,25 @@ footer p { font-size: .77rem; color: var(--text-dim); }
         <span class="t-file">workflow.yml — complete example</span>
       </div>
       <div class="t-body" style="font-size:.77rem">
-        <div><span class="tk">id</span>: <span class="tv">backup-db</span></div>
+        <div><span class="tk">name</span>: <span class="tv">backup-db</span></div>
         <div><span class="tk">version</span>: <span class="tnum">1</span></div>
         <div><span class="tk">schema_version</span>: <span class="tnum">1</span></div>
         <div><span class="tk">steps</span>:</div>
-        <div>&nbsp;&nbsp;- <span class="tk">id</span>: <span class="ts">dump</span></div>
+        <div>&nbsp;&nbsp;- <span class="tk">name</span>: <span class="ts">dump</span></div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">type</span>: <span class="tp">command</span></div>
-        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">run</span>: <span class="tv">echo backup</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">run</span>:</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">command</span>: <span class="tv">echo</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">args</span>: [<span class="ts">"backup"</span>]</div>
         <br>
-        <div>&nbsp;&nbsp;- <span class="tk">id</span>: <span class="ts">pause</span></div>
+        <div>&nbsp;&nbsp;- <span class="tk">name</span>: <span class="ts">pause</span></div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">type</span>: <span class="tp">sleep</span></div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">duration</span>: <span class="tv">2s</span></div>
         <br>
-        <div>&nbsp;&nbsp;- <span class="tk">id</span>: <span class="ts">notify</span></div>
+        <div>&nbsp;&nbsp;- <span class="tk">name</span>: <span class="ts">notify</span></div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">type</span>: <span class="tp">plugin</span></div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">plugin_id</span>: <span class="tv">notifier</span></div>
-        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">run</span>: <span class="tv">notifier-plugin</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">run</span>:</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tk">command</span>: <span class="tv">notifier-plugin</span></div>
       </div>
     </div>
   </div>
@@ -927,7 +930,10 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="cmd-group">
       <div class="cmd-group-title" data-fr="Jobs" data-en="Jobs">Jobs</div>
       <div class="cmd-list">
-        <div class="cmd-row"><span class="cmd-name">flow job add</span><span class="cmd-desc" data-fr="Enregistre un workflow YAML" data-en="Register a YAML workflow">Enregistre un workflow YAML</span><span class="cmd-eg">flow job add workflow.yml</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow job add</span><span class="cmd-desc" data-fr="Enregistre un workflow YAML (upsert)" data-en="Register a YAML workflow (upsert)">Enregistre un workflow YAML (upsert)</span><span class="cmd-eg">flow job add workflow.yml</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow job update</span><span class="cmd-desc" data-fr="Met à jour un job existant" data-en="Update an existing job">Met à jour un job existant</span><span class="cmd-eg">flow job update workflow.yml</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow job delete</span><span class="cmd-desc" data-fr="Supprime un job par ID" data-en="Delete a job by ID">Supprime un job par ID</span><span class="cmd-eg">flow job delete demo</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow job clear</span><span class="cmd-desc" data-fr="Supprime tous les jobs" data-en="Delete all jobs">Supprime tous les jobs</span><span class="cmd-eg">flow job clear</span></div>
         <div class="cmd-row"><span class="cmd-name">flow job list</span><span class="cmd-desc" data-fr="Liste les jobs enregistrés" data-en="List registered jobs">Liste les jobs enregistrés</span><span class="cmd-eg">flow job list</span></div>
         <div class="cmd-row"><span class="cmd-name">flow job run</span><span class="cmd-desc" data-fr="Exécute directement ou met en queue si le daemon tourne" data-en="Run directly or enqueue when the daemon is running">Exécute directement ou met en queue si le daemon tourne</span><span class="cmd-eg">flow job run demo</span></div>
         <div class="cmd-row"><span class="cmd-name">flow test</span><span class="cmd-desc" data-fr="Teste un job (--verbose)" data-en="Test a job (--verbose)">Teste un job (--verbose)</span><span class="cmd-eg">flow test demo --verbose</span></div>
@@ -936,17 +942,17 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="cmd-group">
       <div class="cmd-group-title" data-fr="Runs & Logs" data-en="Runs & Logs">Runs & Logs</div>
       <div class="cmd-list">
-        <div class="cmd-row"><span class="cmd-name">flow run list</span><span class="cmd-desc" data-fr="Liste tous les runs" data-en="List all runs">Liste tous les runs</span><span class="cmd-eg">flow run list</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow run logs</span><span class="cmd-desc" data-fr="Lit les logs JSONL d'un run" data-en="Read JSONL logs for a run">Lit les logs JSONL d'un run</span><span class="cmd-eg">flow run logs &lt;run_id&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow run list</span><span class="cmd-desc" data-fr="Liste tous les runs et leur statut" data-en="List all runs and their status">Liste tous les runs et leur statut</span><span class="cmd-eg">flow run list</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow run logs</span><span class="cmd-desc" data-fr="Lit les events JSONL; stdout/stderr sont dans logs/&lt;run_id&gt;" data-en="Read JSONL events; stdout/stderr live in logs/&lt;run_id&gt;">Lit les events JSONL; stdout/stderr sont dans logs/&lt;run_id&gt;</span><span class="cmd-eg">flow run logs &lt;run_id&gt;</span></div>
         <div class="cmd-row"><span class="cmd-name">flow run cancel</span><span class="cmd-desc" data-fr="Annule une queue ou tue le process daemon actif" data-en="Cancel a queue entry or kill the active daemon process">Annule une queue ou tue le process daemon actif</span><span class="cmd-eg">flow run cancel &lt;run_id&gt;</span></div>
       </div>
     </div>
     <div class="cmd-group">
       <div class="cmd-group-title" data-fr="Steps manuels" data-en="Manual steps">Steps manuels</div>
       <div class="cmd-list">
-        <div class="cmd-row"><span class="cmd-name">flow step retry</span><span class="cmd-desc" data-fr="Rejoue un step" data-en="Retry a step">Rejoue un step</span><span class="cmd-eg">flow step retry &lt;run_id&gt; &lt;step_id&gt;</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow step skip</span><span class="cmd-desc" data-fr="Saute un step" data-en="Skip a step">Saute un step</span><span class="cmd-eg">flow step skip &lt;run_id&gt; &lt;step_id&gt;</span></div>
-        <div class="cmd-row"><span class="cmd-name">flow step rerun-from</span><span class="cmd-desc" data-fr="Repart depuis un step" data-en="Rerun from a step">Repart depuis un step</span><span class="cmd-eg">flow step rerun-from &lt;run_id&gt; &lt;step_id&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow step retry</span><span class="cmd-desc" data-fr="Rejoue un step" data-en="Retry a step">Rejoue un step</span><span class="cmd-eg">flow step retry &lt;run_id&gt; &lt;step_name&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow step skip</span><span class="cmd-desc" data-fr="Saute un step" data-en="Skip a step">Saute un step</span><span class="cmd-eg">flow step skip &lt;run_id&gt; &lt;step_name&gt;</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow step rerun-from</span><span class="cmd-desc" data-fr="Repart depuis un step" data-en="Rerun from a step">Repart depuis un step</span><span class="cmd-eg">flow step rerun-from &lt;run_id&gt; &lt;step_name&gt;</span></div>
       </div>
     </div>
     <div class="cmd-group">
@@ -1013,6 +1019,8 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Manifests de complétion" data-en="Completion manifests">Manifests de complétion</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Moteur d'exécution local" data-en="Local execution engine">Moteur d'exécution local</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Workspaces isolés" data-en="Isolated workspaces">Workspaces isolés</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="stdout/stderr capturés sans redirection shell" data-en="stdout/stderr captured without shell redirection">stdout/stderr capturés sans redirection shell</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Métadonnées workflow et step dans logs/" data-en="Workflow and step metadata in logs/">Métadonnées workflow et step dans logs/</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Projections SQLite" data-en="SQLite projections">Projections SQLite</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Rétention runs/snapshots" data-en="Run/snapshot retention">Rétention runs/snapshots</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Packages .flowpkg avec checksum" data-en=".flowpkg packages with checksums">Packages .flowpkg avec checksum</span></div>

@@ -6,10 +6,11 @@ use serde_json::{Value, json};
 use tokio::time::{Instant, sleep, sleep_until};
 
 use crate::dag::{StepDefinition, StepType};
+use crate::logs;
 use crate::plugins::{
     PluginFlowContext, PluginInput, PluginLimits, PluginPaths, PluginRef, PluginRuntime,
 };
-use crate::supervisor::{CommandLimits, CommandOutput, ProcessSupervisor};
+use crate::supervisor::{CommandLimits, CommandOutput, ManagedProcessLogs, ProcessSupervisor};
 use crate::workspace::RunWorkspace;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -82,18 +83,44 @@ impl WorkflowEngine {
     ) -> Result<(StepOutcome, Vec<crate::events::FlowEvent>)> {
         match step.step_type {
             StepType::Command => {
-                let command = step.run.as_deref().context("command step missing run")?;
-                let (process, started) = ProcessSupervisor::spawn_managed(
-                    command,
+                let run = step.run.as_ref().context("command step missing run")?;
+                let started_at = Utc::now();
+                let mut prepared = logs::prepare_step_logs(
+                    &workspace.root_dir,
+                    workspace.run_id,
+                    &step.name,
+                    run,
+                    run.working_directory().map(str::to_owned),
+                    started_at,
+                )?;
+                let stderr_path = prepared.stderr_path.clone();
+                let (stdout_file, stderr_file) = prepared.take_stdio()?;
+                let (process, started) = match ProcessSupervisor::spawn_managed_run(
+                    run,
                     &workspace.work_dir,
                     workspace.run_id,
-                    Some(step.id.clone()),
-                )?;
-                let output = process.wait(CommandLimits::default()).await?;
+                    Some(step.name.clone()),
+                    ManagedProcessLogs {
+                        stdout: stdout_file,
+                        stderr: stderr_file,
+                        stdout_path: prepared.stdout_path.clone(),
+                        stderr_path: prepared.stderr_path.clone(),
+                    },
+                ) {
+                    Ok(result) => result,
+                    Err(error) => {
+                        let error = format!("{error:#}");
+                        logs::write_spawn_error(&stderr_path, &error)?;
+                        logs::write_step_finished(prepared, Utc::now(), None, Some(error.clone()))?;
+                        bail!("command step {} failed to spawn: {error}", step.name);
+                    }
+                };
+                let output = process.wait_logged(CommandLimits::default()).await?;
+                logs::write_step_finished(prepared, Utc::now(), output.exit_code, None)?;
                 if output.exit_code != Some(0) {
                     bail!(
                         "command step {} failed with {:?}",
-                        step.id,
+                        step.name,
                         output.exit_code
                     );
                 }
@@ -120,7 +147,8 @@ impl WorkflowEngine {
                 Ok((StepOutcome::WaitUntil, Vec::new()))
             }
             StepType::Plugin => {
-                let command = step.run.as_deref().context("plugin step missing run")?;
+                let run = step.run.as_ref().context("plugin step missing run")?;
+                let command = run.display_command();
                 let plugin_id = step
                     .plugin_id
                     .clone()
@@ -133,8 +161,8 @@ impl WorkflowEngine {
                     },
                     flow: PluginFlowContext {
                         run_id: workspace.run_id,
-                        step_id: Some(step.id.clone()),
-                        job_id: None,
+                        step_name: Some(step.name.clone()),
+                        job_name: None,
                     },
                     input: json!({}),
                     env: Default::default(),
@@ -143,7 +171,7 @@ impl WorkflowEngine {
                     },
                     limits: PluginLimits { timeout_ms: 30_000 },
                 };
-                let output = PluginRuntime::run(command, &workspace.work_dir, &input).await?;
+                let output = PluginRuntime::run(&command, &workspace.work_dir, &input).await?;
                 Ok((
                     StepOutcome::Plugin(output.outputs.unwrap_or_else(|| json!({}))),
                     Vec::new(),
@@ -192,7 +220,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::dag::StepType;
+    use crate::dag::{RunCommandDefinition, RunDefinition, StepType};
     use crate::workspace::WorkspaceIsolation;
 
     #[tokio::test]
@@ -202,10 +230,14 @@ mod tests {
             .create(Uuid::new_v4())
             .unwrap();
         let step = StepDefinition {
-            id: "hello".to_owned(),
+            name: "hello".to_owned(),
             step_type: StepType::Command,
             depends_on: vec![],
-            run: Some("echo hello".to_owned()),
+            run: Some(RunDefinition::Command(RunCommandDefinition {
+                command: "rustc".to_owned(),
+                args: vec!["--version".to_owned()],
+                working_directory: None,
+            })),
             plugin_id: None,
             duration: None,
             command: None,
@@ -217,7 +249,7 @@ mod tests {
             .unwrap();
 
         match outcome {
-            StepOutcome::Command(output) => assert!(output.stdout.contains("hello")),
+            StepOutcome::Command(output) => assert!(output.stdout.contains("rustc")),
             _ => panic!("expected command outcome"),
         }
 
@@ -231,10 +263,14 @@ mod tests {
             .create(Uuid::new_v4())
             .unwrap();
         let step = StepDefinition {
-            id: "hello".to_owned(),
+            name: "hello".to_owned(),
             step_type: StepType::Command,
             depends_on: vec![],
-            run: Some("echo hello".to_owned()),
+            run: Some(RunDefinition::Command(RunCommandDefinition {
+                command: "rustc".to_owned(),
+                args: vec!["--version".to_owned()],
+                working_directory: None,
+            })),
             plugin_id: None,
             duration: None,
             command: None,
@@ -251,7 +287,7 @@ mod tests {
             events[0].event_type,
             crate::events::EventType::ProcessStarted
         );
-        assert_eq!(events[0].step_id.as_deref(), Some("hello"));
+        assert_eq!(events[0].step_name.as_deref(), Some("hello"));
 
         std::fs::remove_dir_all(root).ok();
     }
@@ -263,7 +299,7 @@ mod tests {
             .create(Uuid::new_v4())
             .unwrap();
         let step = StepDefinition {
-            id: "pause".to_owned(),
+            name: "pause".to_owned(),
             step_type: StepType::Sleep,
             depends_on: vec![],
             run: None,

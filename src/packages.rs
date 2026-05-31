@@ -11,7 +11,7 @@ pub const PACKAGE_FORMAT_VERSION: u32 = 1;
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FlowPackage {
     pub format_version: u32,
-    pub job_id: String,
+    pub job_name: String,
     pub workflow_version: u32,
     pub schema_version: u32,
     pub workflow_checksum: String,
@@ -28,7 +28,7 @@ pub fn build_package_from_workflow_source(source: &str) -> Result<FlowPackage> {
     let definition = WorkflowDefinition::from_yaml(source)?;
     Ok(FlowPackage {
         format_version: PACKAGE_FORMAT_VERSION,
-        job_id: definition.id,
+        job_name: definition.name,
         workflow_version: definition.version,
         schema_version: definition.schema_version,
         workflow_checksum: workflow_checksum(source),
@@ -69,11 +69,11 @@ pub fn validate_package(package: &FlowPackage) -> Result<()> {
         );
     }
     let definition = WorkflowDefinition::from_yaml(&package.workflow)?;
-    if definition.id != package.job_id {
+    if definition.name != package.job_name {
         bail!(
-            "package job_id mismatch: manifest={}, workflow={}",
-            package.job_id,
-            definition.id
+            "package job_name mismatch: manifest={}, workflow={}",
+            package.job_name,
+            definition.name
         );
     }
     if definition.version != package.workflow_version {
@@ -108,13 +108,15 @@ mod tests {
 
     fn workflow_source() -> &'static str {
         r#"
-id: package-demo
+name: package-demo
 version: 1
 schema_version: 1
 steps:
-  - id: hello
+  - name: hello
     type: command
-    run: echo hello
+    run:
+      command: echo
+      args: ["hello"]
 "#
     }
 
@@ -123,7 +125,7 @@ steps:
         let package = build_package_from_workflow_source(workflow_source()).unwrap();
 
         assert_eq!(package.format_version, PACKAGE_FORMAT_VERSION);
-        assert_eq!(package.job_id, "package-demo");
+        assert_eq!(package.job_name, "package-demo");
         assert!(package.workflow_checksum.starts_with("fnv1a64:"));
     }
 
@@ -145,7 +147,7 @@ steps:
         let (package, legacy) = read_package_or_legacy_workflow(&package_path).unwrap();
 
         assert!(legacy);
-        assert_eq!(package.job_id, "package-demo");
+        assert_eq!(package.job_name, "package-demo");
 
         fs::remove_dir_all(root).ok();
     }

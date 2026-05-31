@@ -4,13 +4,13 @@
   "title": "FlowRun Run Manifest",
   "description": "Schema for .flow/runs/<run_id>/manifest.json — produced at run completion",
   "type": "object",
-  "required": ["workflow_version", "schema_version", "run_id", "job_id", "started_at", "ended_at", "status"],
+  "required": ["workflow_version", "schema_version", "run_id", "job_name", "started_at", "ended_at", "status"],
   "additionalProperties": false,
   "properties": {
     "workflow_version": { "type": "string" },
     "schema_version":   { "type": "string" },
     "run_id":    { "type": "string", "format": "uuid" },
-    "job_id":    { "type": "string" },
+    "job_name":    { "type": "string" },
     "started_at": { "type": "string", "format": "date-time" },
     "ended_at":   { "type": "string", "format": "date-time" },
     "status": {
@@ -22,10 +22,10 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["step_id", "path", "size_bytes"],
+        "required": ["step_name", "path", "size_bytes"],
         "additionalProperties": false,
         "properties": {
-          "step_id":    { "type": "string" },
+          "step_name":    { "type": "string" },
           "path":       { "type": "string" },
           "size_bytes": { "type": "integer", "minimum": 0 }
         }
