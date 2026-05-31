@@ -992,6 +992,15 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       </div>
     </div>
     <div class="cmd-group">
+      <div class="cmd-group-title" data-fr="Schedules cron" data-en="Cron schedules">Schedules cron</div>
+      <div class="cmd-list">
+        <div class="cmd-row"><span class="cmd-name">flow schedule next</span><span class="cmd-desc" data-fr="Affiche les prochaines exécutions d'une expression cron" data-en="Print upcoming executions for a cron expression">Affiche les prochaines exécutions d'une expression cron</span><span class="cmd-eg">flow schedule next "0 */5 * * * * *"</span></div>
+        <div class="cmd-row"><span class="cmd-name">--count</span><span class="cmd-desc" data-fr="Nombre d'exécutions à afficher" data-en="Number of executions to print">Nombre d'exécutions à afficher</span><span class="cmd-eg">flow schedule next "0 */5 * * * * *" --count 3</span></div>
+        <div class="cmd-row"><span class="cmd-name">--from</span><span class="cmd-desc" data-fr="Date UTC de départ pour le calcul" data-en="UTC start date for the calculation">Date UTC de départ pour le calcul</span><span class="cmd-eg">flow schedule next "0 */5 * * * * *" --from 2026-05-31T14:00:00Z</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow schedule workflow</span><span class="cmd-desc" data-fr="Lit schedule: dans un workflow YAML" data-en="Read schedule: from a YAML workflow">Lit schedule: dans un workflow YAML</span><span class="cmd-eg">flow schedule workflow workflow.yml</span></div>
+      </div>
+    </div>
+    <div class="cmd-group">
       <div class="cmd-group-title" data-fr="Rétention" data-en="Retention">Rétention</div>
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow retention run</span><span class="cmd-desc" data-fr="Scanne ou purge les anciens runs" data-en="Scan or prune old runs">Scanne ou purge les anciens runs</span><span class="cmd-eg">flow retention run --dry-run --keep-runs 20</span></div>
@@ -1057,6 +1066,13 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <p style="margin-top:1rem;font-size:.78rem;color:var(--text-dim)" data-fr="Les fichiers sont aussi disponibles directement dans logs/ et .flow/." data-en="Files are also available directly under logs/ and .flow/.">Les fichiers sont aussi disponibles directement dans <code style="color:var(--green)">logs/</code> et <code style="color:var(--green)">.flow/</code>.</p>
     <div class="code-block"><code>Get-Content \".\\logs\\$runId\\ping_1111\\stdout.log\"</code><button class="copy-btn" onclick="copyCode(this,'Get-Content \".\\\\logs\\\\$runId\\\\ping_1111\\\\stdout.log\"')">COPY</button></div>
     <div class="code-block"><code>Get-Content \".\\logs\\$runId\\ping_1111\\step.metadata.json\"</code><button class="copy-btn" onclick="copyCode(this,'Get-Content \".\\\\logs\\\\$runId\\\\ping_1111\\\\step.metadata.json\"')">COPY</button></div>
+
+    <div style="height:32px"></div>
+    <p class="s-desc" data-fr="Les schedules utilisent le format du crate cron : sec min hour day-of-month month day-of-week year." data-en="Schedules use the cron crate format: sec min hour day-of-month month day-of-week year.">Les schedules utilisent le format du crate cron : <code style="color:var(--green)">sec min hour day-of-month month day-of-week year</code>.</p>
+    <div class="code-block"><code>flow schedule next \"0 */5 * * * * *\" --count 5</code><button class="copy-btn" onclick="copyCode(this,'flow schedule next \"0 */5 * * * * *\" --count 5')">COPY</button></div>
+    <div class="code-block"><code>flow schedule next \"0 */5 * * * * *\" --from 2026-05-31T14:00:00Z --count 3</code><button class="copy-btn" onclick="copyCode(this,'flow schedule next \"0 */5 * * * * *\" --from 2026-05-31T14:00:00Z --count 3')">COPY</button></div>
+    <div class="code-block"><code>flow schedule workflow .\\workflow.yml</code><button class="copy-btn" onclick="copyCode(this,'flow schedule workflow .\\\\workflow.yml')">COPY</button></div>
+    <p style="margin-top:.8rem;font-size:.78rem;color:var(--text-dim)" data-fr="Exemples : 0 0 * * * * * = toutes les heures, 0 */10 * * * * * = toutes les 10 minutes, 0 30 9 * * Mon * = chaque lundi à 09:30 UTC." data-en="Examples: 0 0 * * * * * = every hour, 0 */10 * * * * * = every 10 minutes, 0 30 9 * * Mon * = every Monday at 09:30 UTC.">Exemples : <code style="color:var(--green)">0 0 * * * * *</code> = toutes les heures, <code style="color:var(--green)">0 */10 * * * * *</code> = toutes les 10 minutes, <code style="color:var(--green)">0 30 9 * * Mon *</code> = chaque lundi à 09:30 UTC.</p>
   </div>
 </section>
 
@@ -1082,6 +1098,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Daemon long-running avec queue et statut" data-en="Long-running daemon with queue and status">Daemon long-running avec queue et statut</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Cancel réel avec kill du process tree" data-en="Real cancel with process-tree kill">Cancel réel avec kill du process tree</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Plugin test avec workspace isolé" data-en="Plugin test with isolated workspace">Plugin test avec workspace isolé</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Preview cron avec flow schedule next" data-en="Cron preview with flow schedule next">Preview cron avec flow schedule next</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Release Windows automatique sur tag" data-en="Automatic Windows release on tag">Release Windows automatique sur tag</span></div>
     </div>
     <div class="status-card">

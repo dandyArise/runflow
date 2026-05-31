@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
 use tokio::time::{Duration, sleep};
@@ -20,6 +20,7 @@ use crate::packages::{
 };
 use crate::plugins::{PluginInput, PluginManifest, PluginRuntime, parse_manifest};
 use crate::retention::{RetentionPolicy, run_retention};
+use crate::scheduler::Scheduler;
 use crate::schemas;
 use crate::state::{RunState, StateChangedPayload};
 use crate::supervisor::{CommandLimits, ManagedProcessLogs, ProcessSupervisor};
@@ -75,6 +76,10 @@ enum Command {
     Retention {
         #[command(subcommand)]
         command: RetentionCommand,
+    },
+    Schedule {
+        #[command(subcommand)]
+        command: ScheduleCommand,
     },
     Version,
 }
@@ -191,6 +196,24 @@ enum RetentionCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum ScheduleCommand {
+    Next {
+        expression: String,
+        #[arg(short, long, default_value_t = 5)]
+        count: usize,
+        #[arg(long)]
+        from: Option<DateTime<Utc>>,
+    },
+    Workflow {
+        workflow: PathBuf,
+        #[arg(short, long, default_value_t = 5)]
+        count: usize,
+        #[arg(long)]
+        from: Option<DateTime<Utc>>,
+    },
+}
+
 impl Cli {
     pub async fn run(self) -> Result<()> {
         let root = self.root;
@@ -209,6 +232,7 @@ impl Cli {
             }
             Command::Daemon { command } => run_daemon_command(&root, command).await,
             Command::Retention { command } => run_retention_command(&root, command),
+            Command::Schedule { command } => run_schedule_command(command),
             Command::Version => {
                 println!("runflow {}", env!("CARGO_PKG_VERSION"));
                 Ok(())
@@ -1001,9 +1025,45 @@ fn run_retention_command(root: &Path, command: RetentionCommand) -> Result<()> {
     }
 }
 
+fn run_schedule_command(command: ScheduleCommand) -> Result<()> {
+    let (label, expression, count, from) = match command {
+        ScheduleCommand::Next {
+            expression,
+            count,
+            from,
+        } => ("expression".to_owned(), expression, count, from),
+        ScheduleCommand::Workflow {
+            workflow,
+            count,
+            from,
+        } => {
+            let source = fs::read_to_string(&workflow)
+                .with_context(|| format!("failed to read {}", workflow.display()))?;
+            let workflow_definition = WorkflowDefinition::from_yaml(&source)?;
+            let expression = workflow_definition
+                .schedule
+                .with_context(|| format!("workflow {} has no schedule", workflow.display()))?;
+            (workflow_definition.name, expression, count, from)
+        }
+    };
+    let from = from.unwrap_or_else(Utc::now);
+    let scheduler = Scheduler::parse(&expression)?;
+
+    println!("schedule {label}: {expression}");
+    println!("from: {from}");
+    for datetime in scheduler.upcoming_after(from, count) {
+        println!("{datetime}");
+    }
+
+    Ok(())
+}
+
 fn validate_workflow(workflow: &Path) -> Result<()> {
-    let diagnostics = schemas::validate_workflow_file(workflow)?;
+    let source = fs::read_to_string(workflow)
+        .with_context(|| format!("failed to read workflow {}", workflow.display()))?;
+    let diagnostics = schemas::validate_workflow_yaml(&source)?;
     if diagnostics.is_empty() {
+        WorkflowDefinition::from_yaml(&source)?;
         println!("valid: {}", workflow.display());
         Ok(())
     } else {
@@ -1125,6 +1185,8 @@ mod tests {
             vec!["flow", "migrate", "workflow.yml"],
             vec!["flow", "daemon", "status"],
             vec!["flow", "retention", "run"],
+            vec!["flow", "schedule", "next", "0 */5 * * * * *"],
+            vec!["flow", "schedule", "workflow", "workflow.yml"],
             vec!["flow", "version"],
         ] {
             assert!(Cli::try_parse_from(args).is_ok());

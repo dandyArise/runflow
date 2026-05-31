@@ -128,7 +128,13 @@ impl WorkflowDefinition {
             }
         })?;
 
-        serde_yaml::from_str(source).context("failed to parse workflow YAML")
+        let workflow: Self =
+            serde_yaml::from_str(source).context("failed to parse workflow YAML")?;
+        if let Some(schedule) = &workflow.schedule {
+            crate::scheduler::Scheduler::parse(schedule)?;
+        }
+
+        Ok(workflow)
     }
 }
 
@@ -193,6 +199,7 @@ mod tests {
 name: backup-db
 version: 1
 schema_version: 1
+schedule: "0 */5 * * * * *"
 failure_policy: continue
 concurrency:
   policy: queue
@@ -216,6 +223,7 @@ steps:
         let ordered = graph.ordered_steps().unwrap();
 
         assert_eq!(workflow.failure_policy, FailurePolicy::Continue);
+        assert_eq!(workflow.schedule.as_deref(), Some("0 */5 * * * * *"));
         assert_eq!(
             workflow.concurrency.unwrap().policy,
             crate::scheduler::ConcurrencyPolicy::Queue
@@ -274,5 +282,25 @@ steps:
         .unwrap();
 
         assert!(WorkflowGraph::build(&workflow).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_cron_schedule() {
+        let err = WorkflowDefinition::from_yaml(
+            r#"
+name: bad-schedule
+version: 1
+schema_version: 1
+schedule: "not cron"
+steps:
+  - name: echo
+    type: command
+    run:
+      command: echo
+"#,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid cron expression"));
     }
 }

@@ -186,7 +186,37 @@ flow validate .\workflow.yml
 flow migrate .\workflow.yml
 ```
 
-`migrate` currently validates the workflow and reports that no migration is required.
+`validate` also checks the optional workflow `schedule` cron expression. `migrate` currently validates the workflow and reports that no migration is required.
+
+### Schedules
+
+RunFlow accepts cron expressions through the `cron` crate format:
+
+```text
+sec min hour day-of-month month day-of-week year
+```
+
+Preview the next executions for an expression:
+
+```powershell
+flow schedule next "0 */5 * * * * *"
+flow schedule next "0 */5 * * * * *" --count 3
+flow schedule next "0 */5 * * * * *" --from 2026-05-31T14:00:00Z
+```
+
+Preview the next executions from a workflow file containing `schedule:`:
+
+```powershell
+flow schedule workflow .\workflow.yml
+```
+
+Examples:
+
+```text
+"0 0 * * * * *"      # every hour
+"0 */10 * * * * *"   # every 10 minutes
+"0 30 9 * * Mon *"   # every Monday at 09:30 UTC
+```
 
 ### Jobs
 

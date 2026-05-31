@@ -47,6 +47,10 @@ impl Scheduler {
     pub fn next_after(&self, after: DateTime<Utc>) -> Option<DateTime<Utc>> {
         self.schedule.after(&after).next()
     }
+
+    pub fn upcoming_after(&self, after: DateTime<Utc>, count: usize) -> Vec<DateTime<Utc>> {
+        self.schedule.after(&after).take(count).collect()
+    }
 }
 
 impl ConcurrencyController {
@@ -115,6 +119,22 @@ mod tests {
         assert_eq!(
             next,
             "2026-05-29T01:00:00Z".parse::<DateTime<Utc>>().unwrap()
+        );
+    }
+
+    #[test]
+    fn parses_seven_field_cron_and_returns_multiple_runs() {
+        let scheduler = Scheduler::parse("0 */5 * * * * *").unwrap();
+        let next =
+            scheduler.upcoming_after("2026-05-31T14:00:00Z".parse::<DateTime<Utc>>().unwrap(), 3);
+
+        assert_eq!(
+            next,
+            vec![
+                "2026-05-31T14:05:00Z".parse::<DateTime<Utc>>().unwrap(),
+                "2026-05-31T14:10:00Z".parse::<DateTime<Utc>>().unwrap(),
+                "2026-05-31T14:15:00Z".parse::<DateTime<Utc>>().unwrap(),
+            ]
         );
     }
 

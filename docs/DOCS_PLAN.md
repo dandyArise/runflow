@@ -11,14 +11,15 @@ Ce fichier est une checklist de couverture pour la doc GitHub Pages (`docs/index
 3. Quick start (validate/add/run/output/summary) + ping example
 4. Workflow YAML reference (v1): top-level fields + step types (`command/sleep/wait_until/plugin`)
 5. CLI reference: list *every* command and flags
-6. Daemon behavior: queue, status, clean stop/restart
-7. Cancel behavior: queued vs active run, process-tree kill, events written
-8. Plugins: manifest + schemas, `plugin test` execution rules (cwd/workspace/timeout/validation)
-9. Packages (`.flowpkg`): build/install, checksum, install location
-10. Retention: dry-run/delete, keep-runs, older-than-days, what is deleted
-11. Troubleshooting: common errors + where to look (`logs/`, `.flow/`)
-12. Release: tagging + artifacts
-13. Development: fmt/clippy/test/build
+6. Cron schedules: `schedule:`, `flow schedule next`, `flow schedule workflow`, cron field format
+7. Daemon behavior: queue, status, clean stop/restart
+8. Cancel behavior: queued vs active run, process-tree kill, events written
+9. Plugins: manifest + schemas, `plugin test` execution rules (cwd/workspace/timeout/validation)
+10. Packages (`.flowpkg`): build/install, checksum, install location
+11. Retention: dry-run/delete, keep-runs, older-than-days, what is deleted
+12. Troubleshooting: common errors + where to look (`logs/`, `.flow/`)
+13. Release: tagging + artifacts
+14. Development: fmt/clippy/test/build
 
 Canonical source of truth for the CLI list: `src/cli.rs` enums (`Command`, `JobCommand`, `RunCommand`, etc.).
 
@@ -31,14 +32,14 @@ Canonical source of truth for the CLI list: `src/cli.rs` enums (`Command`, `JobC
 3. Démarrage rapide (validate/add/run/output/summary) + exemple ping
 4. Référence YAML (v1): champs top-level + types de step (`command/sleep/wait_until/plugin`)
 5. Référence CLI: *toutes* les commandes et flags
-6. Daemon: queue, status, stop/restart propre
-7. Cancel: queued vs actif, kill process tree, events écrits
-8. Plugins: manifest + schémas, règles d’exécution de `plugin test` (cwd/workspace/timeout/validation)
-9. Packages (`.flowpkg`): build/install, checksum, emplacement
-10. Rétention: dry-run/delete, keep-runs, older-than-days, ce qui est supprimé
-11. Dépannage: erreurs typiques + où regarder (`logs/`, `.flow/`)
-12. Release: tags + artefacts
-13. Dev: fmt/clippy/test/build
+6. Schedules cron: `schedule:`, `flow schedule next`, `flow schedule workflow`, format des champs cron
+7. Daemon: queue, status, stop/restart propre
+8. Cancel: queued vs actif, kill process tree, events écrits
+9. Plugins: manifest + schémas, règles d’exécution de `plugin test` (cwd/workspace/timeout/validation)
+10. Packages (`.flowpkg`): build/install, checksum, emplacement
+11. Rétention: dry-run/delete, keep-runs, older-than-days, ce qui est supprimé
+12. Dépannage: erreurs typiques + où regarder (`logs/`, `.flow/`)
+13. Release: tags + artefacts
+14. Dev: fmt/clippy/test/build
 
 Source de vérité pour la liste de commandes: `src/cli.rs`.
-
