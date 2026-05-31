@@ -883,7 +883,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
 
   <div class="yaml-grid reveal">
     <div>
-      <p class="s-desc" style="margin-bottom:1.4rem" data-fr="Un workflow RunFlow se définit avec un name, une version et une liste de steps. Chaque step a un type qui détermine son comportement." data-en="A RunFlow workflow is defined with a name, a version, and a list of steps. Each step has a type that drives its behavior.">Un workflow se définit avec un name, une version et une liste de steps. Chaque step a un type.</p>
+      <p class="s-desc" style="margin-bottom:1.4rem" data-fr="Seul name est obligatoire pour créer un draft. version et schema_version valent 1 par défaut, steps vaut []. Pour run/test/package, il faut au moins un step." data-en="Only name is required to create a draft. version and schema_version default to 1, steps defaults to []. Run/test/package require at least one step.">Seul name est obligatoire pour créer un draft. version et schema_version valent 1 par défaut, steps vaut []. Pour run/test/package, il faut au moins un step.</p>
       <p style="font-size:.8rem;color:var(--text-dim);margin-bottom:.8rem" data-fr="Types de steps supportés :" data-en="Supported step types:">Types de steps supportés :</p>
       <div class="step-types">
         <span class="step-tag">command</span>
@@ -898,6 +898,10 @@ footer p { font-size: .77rem; color: var(--text-dim); }
         <span class="t-file">workflow.yml — complete example</span>
       </div>
       <div class="t-body" style="font-size:.77rem">
+        <div><span class="tk"># draft minimal valide</span></div>
+        <div><span class="tk">name</span>: <span class="tv">draft-job</span></div>
+        <br>
+        <div><span class="tk"># workflow exécutable</span></div>
         <div><span class="tk">name</span>: <span class="tv">backup-db</span></div>
         <div><span class="tk">version</span>: <span class="tnum">1</span></div>
         <div><span class="tk">schema_version</span>: <span class="tnum">1</span></div>
@@ -1086,6 +1090,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <h4 data-fr="✅ Fonctionnel" data-en="✅ Working">✅ Fonctionnel</h4>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="CLI complet S6" data-en="Full S6 CLI">CLI complet S6</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Validation de schéma YAML" data-en="YAML schema validation">Validation de schéma YAML</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Workflows draft avec name seul" data-en="Draft workflows with name only">Workflows draft avec name seul</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="JSONL event store" data-en="JSONL event store">JSONL event store</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Manifests de complétion" data-en="Completion manifests">Manifests de complétion</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Moteur d'exécution local" data-en="Local execution engine">Moteur d'exécution local</span></div>

@@ -116,7 +116,7 @@ steps: []
 
         assert!(diagnostics.iter().any(|item| item.path == "/name"));
         assert!(diagnostics.iter().any(|item| item.path == "/version"));
-        assert!(diagnostics.iter().any(|item| item.path == "/steps"));
+        assert!(!diagnostics.iter().any(|item| item.path == "/steps"));
     }
 
     #[test]

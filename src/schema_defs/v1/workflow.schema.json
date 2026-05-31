@@ -4,7 +4,7 @@
   "title": "FlowRun Workflow",
   "description": "Schema for FlowRun workflow YAML files (parsed to JSON for validation)",
   "type": "object",
-  "required": ["name", "version", "schema_version", "steps"],
+  "required": ["name"],
   "additionalProperties": false,
   "properties": {
     "name": {
@@ -15,11 +15,13 @@
     "version": {
       "type": "integer",
       "minimum": 1,
+      "default": 1,
       "description": "Workflow definition version"
     },
     "schema_version": {
       "type": "integer",
       "minimum": 1,
+      "default": 1,
       "description": "FlowRun schema version for migration"
     },
     "schedule": {
@@ -87,7 +89,7 @@
     },
     "steps": {
       "type": "array",
-      "minItems": 1,
+      "default": [],
       "items": { "$ref": "#/$defs/step" }
     },
     "tests": {

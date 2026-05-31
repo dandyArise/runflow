@@ -319,7 +319,9 @@ async fn run_job(root: &Path, job_name: &str) -> Result<()> {
 }
 
 fn enqueue_job_run(root: &Path, job_name: &str) -> Result<Uuid> {
-    read_job_source(root, job_name)?;
+    let source = read_job_source(root, job_name)?;
+    let workflow = WorkflowDefinition::from_yaml(&source)?;
+    ensure_runnable_workflow(&workflow)?;
     let run_id = Uuid::new_v4();
     let event_store = EventStore::new(root);
     event_store.append(&FlowEvent::new(
@@ -356,6 +358,7 @@ async fn run_job_direct(
 ) -> Result<RunState> {
     let source = read_job_source(root, job_name)?;
     let workflow = WorkflowDefinition::from_yaml(&source)?;
+    ensure_runnable_workflow(&workflow)?;
     let graph = WorkflowGraph::build(&workflow)?;
     let started_at = Utc::now();
     let event_store = EventStore::new(root);
@@ -843,6 +846,10 @@ async fn plugin_test(
 fn run_package_command(root: &Path, command: PackageCommand) -> Result<()> {
     match command {
         PackageCommand::Build { workflow } => {
+            let source = fs::read_to_string(&workflow)
+                .with_context(|| format!("failed to read {}", workflow.display()))?;
+            let workflow_definition = WorkflowDefinition::from_yaml(&source)?;
+            ensure_runnable_workflow(&workflow_definition)?;
             let package_data = build_package_from_workflow_file(&workflow)?;
             let package_dir = root.join(".flow").join("packages");
             let package = package_dir.join(format!("{}.flowpkg", package_data.job_name));
@@ -870,6 +877,7 @@ fn run_package_command(root: &Path, command: PackageCommand) -> Result<()> {
 fn run_test_command(root: &Path, job_name: &str, verbose: bool) -> Result<()> {
     let source = read_job_source(root, job_name)?;
     let workflow = WorkflowDefinition::from_yaml(&source)?;
+    ensure_runnable_workflow(&workflow)?;
     WorkflowGraph::build(&workflow)?;
     if verbose {
         println!("steps: {}", workflow.steps.len());
@@ -1072,6 +1080,16 @@ fn validate_workflow(workflow: &Path) -> Result<()> {
     }
 }
 
+fn ensure_runnable_workflow(workflow: &WorkflowDefinition) -> Result<()> {
+    if workflow.steps.is_empty() {
+        bail!(
+            "workflow {} has no steps; add at least one step before running, testing, or packaging",
+            workflow.name
+        );
+    }
+    Ok(())
+}
+
 fn list_job_names(root: &Path) -> Result<Vec<String>> {
     list_file_stems(&jobs_dir(root), "yml")
 }
@@ -1250,6 +1268,43 @@ steps:
                 .exists()
         );
 
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[tokio::test]
+    async fn job_add_accepts_draft_but_run_rejects_empty_steps() {
+        let root = std::env::temp_dir().join(format!("runflow-draft-{}", Uuid::new_v4()));
+        let workflow = root.join("workflow.yml");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&workflow, "name: draft-job\n").unwrap();
+
+        Cli::try_parse_from([
+            "flow",
+            "--root",
+            root.to_str().unwrap(),
+            "job",
+            "add",
+            workflow.to_str().unwrap(),
+        ])
+        .unwrap()
+        .run()
+        .await
+        .unwrap();
+
+        let err = Cli::try_parse_from([
+            "flow",
+            "--root",
+            root.to_str().unwrap(),
+            "job",
+            "run",
+            "draft-job",
+        ])
+        .unwrap()
+        .run()
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("has no steps"));
         fs::remove_dir_all(root).ok();
     }
 }

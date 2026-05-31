@@ -16,12 +16,15 @@ pub enum FailurePolicy {
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub struct WorkflowDefinition {
     pub name: String,
+    #[serde(default = "default_version")]
     pub version: u32,
+    #[serde(default = "default_schema_version")]
     pub schema_version: u32,
     pub schedule: Option<String>,
     #[serde(default)]
     pub failure_policy: FailurePolicy,
     pub concurrency: Option<ConcurrencyDefinition>,
+    #[serde(default)]
     pub steps: Vec<StepDefinition>,
 }
 
@@ -138,6 +141,14 @@ impl WorkflowDefinition {
     }
 }
 
+fn default_version() -> u32 {
+    1
+}
+
+fn default_schema_version() -> u32 {
+    1
+}
+
 impl WorkflowGraph {
     pub fn build(workflow: &WorkflowDefinition) -> Result<Self> {
         let mut graph = DiGraph::<String, ()>::new();
@@ -233,6 +244,16 @@ steps:
             ordered.iter().position(|name| name == "dump")
                 < ordered.iter().position(|name| name == "compress")
         );
+    }
+
+    #[test]
+    fn parses_draft_workflow_with_name_only() {
+        let workflow = WorkflowDefinition::from_yaml("name: draft-workflow\n").unwrap();
+
+        assert_eq!(workflow.name, "draft-workflow");
+        assert_eq!(workflow.version, 1);
+        assert_eq!(workflow.schema_version, 1);
+        assert!(workflow.steps.is_empty());
     }
 
     #[test]

@@ -334,6 +334,24 @@ Retention scans `.flow/runs`, keeps the newest runs according to `--keep-runs`, 
 
 ## Minimal Workflow Format
 
+The smallest valid draft workflow only needs `name`:
+
+```yaml
+name: draft-job
+```
+
+RunFlow defaults missing fields to:
+
+```yaml
+version: 1
+schema_version: 1
+steps: []
+```
+
+Draft workflows can be validated, added, listed and edited. They cannot be run, tested or packaged until they contain at least one step.
+
+Runnable workflows need steps:
+
 ```yaml
 name: backup-db
 version: 1
