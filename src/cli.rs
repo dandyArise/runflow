@@ -1048,10 +1048,18 @@ fn run_schedule_command(command: ScheduleCommand) -> Result<()> {
             let source = fs::read_to_string(&workflow)
                 .with_context(|| format!("failed to read {}", workflow.display()))?;
             let workflow_definition = WorkflowDefinition::from_yaml(&source)?;
-            let expression = workflow_definition
+            let schedule = workflow_definition
                 .schedule
                 .with_context(|| format!("workflow {} has no schedule", workflow.display()))?;
-            (workflow_definition.name, expression, count, from)
+            if !schedule.enabled() {
+                bail!("workflow {} schedule is disabled", workflow.display());
+            }
+            (
+                format!("{} ({})", workflow_definition.name, schedule.timezone()),
+                schedule.cron().to_owned(),
+                count,
+                from,
+            )
         }
     };
     let from = from.unwrap_or_else(Utc::now);

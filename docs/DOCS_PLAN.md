@@ -11,7 +11,7 @@ Ce fichier est une checklist de couverture pour la doc GitHub Pages (`docs/index
 3. Quick start (validate/add/run/output/summary) + ping example
 4. Workflow YAML reference (v1): `name`-only drafts, default fields, runnable workflows requiring steps, step types (`command/sleep/wait_until/plugin`)
 5. CLI reference: list *every* command and flags
-6. Cron schedules: `schedule:`, `flow schedule next`, `flow schedule workflow`, cron field format
+6. Cron schedules: `schedule.cron/timezone/enabled`, shortcut `schedule: "..."`, `flow schedule next`, `flow schedule workflow`, cron field format
 7. Daemon behavior: queue, status, clean stop/restart
 8. Cancel behavior: queued vs active run, process-tree kill, events written
 9. Plugins: manifest + schemas, `plugin test` execution rules (cwd/workspace/timeout/validation)
@@ -32,7 +32,7 @@ Canonical source of truth for the CLI list: `src/cli.rs` enums (`Command`, `JobC
 3. Démarrage rapide (validate/add/run/output/summary) + exemple ping
 4. Référence YAML (v1): drafts avec `name` seul, champs par défaut, workflows exécutables avec steps, types de step (`command/sleep/wait_until/plugin`)
 5. Référence CLI: *toutes* les commandes et flags
-6. Schedules cron: `schedule:`, `flow schedule next`, `flow schedule workflow`, format des champs cron
+6. Schedules cron: `schedule.cron/timezone/enabled`, raccourci `schedule: "..."`, `flow schedule next`, `flow schedule workflow`, format des champs cron
 7. Daemon: queue, status, stop/restart propre
 8. Cancel: queued vs actif, kill process tree, events écrits
 9. Plugins: manifest + schémas, règles d’exécution de `plugin test` (cwd/workspace/timeout/validation)

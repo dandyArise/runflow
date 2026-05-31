@@ -210,6 +210,28 @@ Preview the next executions from a workflow file containing `schedule:`:
 flow schedule workflow .\workflow.yml
 ```
 
+Recommended workflow format:
+
+```yaml
+name: scheduled-job
+schedule:
+  cron: "0 */5 * * * * *"
+  timezone: Europe/Paris
+  enabled: true
+steps:
+  - name: hello
+    type: command
+    run:
+      command: echo
+      args: ["hello"]
+```
+
+The short format remains supported and is equivalent to UTC + enabled:
+
+```yaml
+schedule: "0 */5 * * * * *"
+```
+
 Examples:
 
 ```text

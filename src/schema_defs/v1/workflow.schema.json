@@ -25,8 +25,34 @@
       "description": "FlowRun schema version for migration"
     },
     "schedule": {
-      "type": "string",
-      "description": "Cron expression (e.g. '0 1 * * *')"
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Cron expression shortcut (UTC, enabled)"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cron"],
+          "properties": {
+            "cron": {
+              "type": "string",
+              "description": "Cron expression using sec min hour day-of-month month day-of-week year"
+            },
+            "timezone": {
+              "type": "string",
+              "default": "UTC",
+              "description": "Schedule timezone label"
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether this workflow schedule is active"
+            }
+          }
+        }
+      ],
+      "description": "Cron schedule shortcut or detailed schedule object"
     },
     "failure_policy": {
       "type": "string",

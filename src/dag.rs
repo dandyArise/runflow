@@ -20,7 +20,7 @@ pub struct WorkflowDefinition {
     pub version: u32,
     #[serde(default = "default_schema_version")]
     pub schema_version: u32,
-    pub schedule: Option<String>,
+    pub schedule: Option<ScheduleDefinition>,
     #[serde(default)]
     pub failure_policy: FailurePolicy,
     pub concurrency: Option<ConcurrencyDefinition>,
@@ -31,6 +31,45 @@ pub struct WorkflowDefinition {
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub struct ConcurrencyDefinition {
     pub policy: crate::scheduler::ConcurrencyPolicy,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+#[serde(untagged)]
+pub enum ScheduleDefinition {
+    Cron(String),
+    Detailed(ScheduleConfig),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+pub struct ScheduleConfig {
+    pub cron: String,
+    #[serde(default = "default_schedule_timezone")]
+    pub timezone: String,
+    #[serde(default = "default_schedule_enabled")]
+    pub enabled: bool,
+}
+
+impl ScheduleDefinition {
+    pub fn cron(&self) -> &str {
+        match self {
+            Self::Cron(cron) => cron,
+            Self::Detailed(config) => &config.cron,
+        }
+    }
+
+    pub fn timezone(&self) -> &str {
+        match self {
+            Self::Cron(_) => "UTC",
+            Self::Detailed(config) => &config.timezone,
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        match self {
+            Self::Cron(_) => true,
+            Self::Detailed(config) => config.enabled,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
@@ -134,7 +173,7 @@ impl WorkflowDefinition {
         let workflow: Self =
             serde_yaml::from_str(source).context("failed to parse workflow YAML")?;
         if let Some(schedule) = &workflow.schedule {
-            crate::scheduler::Scheduler::parse(schedule)?;
+            crate::scheduler::Scheduler::parse(schedule.cron())?;
         }
 
         Ok(workflow)
@@ -147,6 +186,14 @@ fn default_version() -> u32 {
 
 fn default_schema_version() -> u32 {
     1
+}
+
+fn default_schedule_timezone() -> String {
+    "UTC".to_owned()
+}
+
+fn default_schedule_enabled() -> bool {
+    true
 }
 
 impl WorkflowGraph {
@@ -234,7 +281,10 @@ steps:
         let ordered = graph.ordered_steps().unwrap();
 
         assert_eq!(workflow.failure_policy, FailurePolicy::Continue);
-        assert_eq!(workflow.schedule.as_deref(), Some("0 */5 * * * * *"));
+        let schedule = workflow.schedule.as_ref().unwrap();
+        assert_eq!(schedule.cron(), "0 */5 * * * * *");
+        assert_eq!(schedule.timezone(), "UTC");
+        assert!(schedule.enabled());
         assert_eq!(
             workflow.concurrency.unwrap().policy,
             crate::scheduler::ConcurrencyPolicy::Queue
@@ -254,6 +304,41 @@ steps:
         assert_eq!(workflow.version, 1);
         assert_eq!(workflow.schema_version, 1);
         assert!(workflow.steps.is_empty());
+    }
+
+    #[test]
+    fn parses_detailed_schedule() {
+        let workflow = WorkflowDefinition::from_yaml(
+            r#"
+name: scheduled-job
+schedule:
+  cron: "0 */10 * * * * *"
+  timezone: Europe/Paris
+  enabled: false
+"#,
+        )
+        .unwrap();
+        let schedule = workflow.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.cron(), "0 */10 * * * * *");
+        assert_eq!(schedule.timezone(), "Europe/Paris");
+        assert!(!schedule.enabled());
+    }
+
+    #[test]
+    fn detailed_schedule_defaults_to_utc_and_enabled() {
+        let workflow = WorkflowDefinition::from_yaml(
+            r#"
+name: scheduled-job
+schedule:
+  cron: "0 0 * * * * *"
+"#,
+        )
+        .unwrap();
+        let schedule = workflow.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.timezone(), "UTC");
+        assert!(schedule.enabled());
     }
 
     #[test]
