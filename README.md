@@ -234,6 +234,19 @@ The short format remains supported and is equivalent to UTC + enabled:
 schedule: "0 */5 * * * * *"
 ```
 
+No `schedule` means manual/direct execution only. You can also disable scheduling explicitly while keeping manual `flow job run` available:
+
+```yaml
+schedule: false
+```
+
+or:
+
+```yaml
+schedule:
+  enabled: false
+```
+
 When `flow daemon start` is running, scheduled jobs are automatically enqueued when their next cron occurrence is due. The daemon stores schedule cursors in `.flow/daemon/schedules/` so a job is not enqueued twice for the same occurrence.
 
 Examples:

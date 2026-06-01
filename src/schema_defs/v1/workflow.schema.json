@@ -31,9 +31,12 @@
           "description": "Cron expression shortcut (UTC, enabled)"
         },
         {
+          "const": false,
+          "description": "Disable scheduling; manual execution remains available"
+        },
+        {
           "type": "object",
           "additionalProperties": false,
-          "required": ["cron"],
           "properties": {
             "cron": {
               "type": "string",

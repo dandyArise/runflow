@@ -985,7 +985,10 @@ fn enqueue_due_scheduled_runs(root: &Path, now: DateTime<Utc>) -> Result<usize> 
             continue;
         }
 
-        let cron = schedule.cron().to_owned();
+        let Some(cron) = schedule.cron().map(str::to_owned) else {
+            remove_schedule_state(root, &job_name)?;
+            continue;
+        };
         let scheduler = Scheduler::parse(&cron)?;
         let mut state = read_schedule_state(root, &job_name)?;
         if state.as_ref().is_none_or(|state| state.cron != cron) {
@@ -1174,9 +1177,12 @@ fn run_schedule_command(command: ScheduleCommand) -> Result<()> {
             if !schedule.enabled() {
                 bail!("workflow {} schedule is disabled", workflow.display());
             }
+            let cron = schedule
+                .cron()
+                .with_context(|| format!("workflow {} schedule has no cron", workflow.display()))?;
             (
                 format!("{} ({})", workflow_definition.name, schedule.timezone()),
-                schedule.cron().to_owned(),
+                cron.to_owned(),
                 count,
                 from,
             )

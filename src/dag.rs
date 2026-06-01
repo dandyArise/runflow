@@ -36,13 +36,14 @@ pub struct ConcurrencyDefinition {
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum ScheduleDefinition {
+    Disabled(bool),
     Cron(String),
     Detailed(ScheduleConfig),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
 pub struct ScheduleConfig {
-    pub cron: String,
+    pub cron: Option<String>,
     #[serde(default = "default_schedule_timezone")]
     pub timezone: String,
     #[serde(default = "default_schedule_enabled")]
@@ -50,15 +51,17 @@ pub struct ScheduleConfig {
 }
 
 impl ScheduleDefinition {
-    pub fn cron(&self) -> &str {
+    pub fn cron(&self) -> Option<&str> {
         match self {
-            Self::Cron(cron) => cron,
-            Self::Detailed(config) => &config.cron,
+            Self::Disabled(_) => None,
+            Self::Cron(cron) => Some(cron),
+            Self::Detailed(config) => config.cron.as_deref(),
         }
     }
 
     pub fn timezone(&self) -> &str {
         match self {
+            Self::Disabled(_) => "UTC",
             Self::Cron(_) => "UTC",
             Self::Detailed(config) => &config.timezone,
         }
@@ -66,6 +69,7 @@ impl ScheduleDefinition {
 
     pub fn enabled(&self) -> bool {
         match self {
+            Self::Disabled(value) => *value,
             Self::Cron(_) => true,
             Self::Detailed(config) => config.enabled,
         }
@@ -172,8 +176,13 @@ impl WorkflowDefinition {
 
         let workflow: Self =
             serde_yaml::from_str(source).context("failed to parse workflow YAML")?;
-        if let Some(schedule) = &workflow.schedule {
-            crate::scheduler::Scheduler::parse(schedule.cron())?;
+        if let Some(schedule) = &workflow.schedule
+            && schedule.enabled()
+        {
+            let cron = schedule
+                .cron()
+                .context("enabled schedule missing cron expression")?;
+            crate::scheduler::Scheduler::parse(cron)?;
         }
 
         Ok(workflow)
@@ -282,7 +291,7 @@ steps:
 
         assert_eq!(workflow.failure_policy, FailurePolicy::Continue);
         let schedule = workflow.schedule.as_ref().unwrap();
-        assert_eq!(schedule.cron(), "0 */5 * * * * *");
+        assert_eq!(schedule.cron(), Some("0 */5 * * * * *"));
         assert_eq!(schedule.timezone(), "UTC");
         assert!(schedule.enabled());
         assert_eq!(
@@ -320,7 +329,7 @@ schedule:
         .unwrap();
         let schedule = workflow.schedule.as_ref().unwrap();
 
-        assert_eq!(schedule.cron(), "0 */10 * * * * *");
+        assert_eq!(schedule.cron(), Some("0 */10 * * * * *"));
         assert_eq!(schedule.timezone(), "Europe/Paris");
         assert!(!schedule.enabled());
     }
@@ -339,6 +348,51 @@ schedule:
 
         assert_eq!(schedule.timezone(), "UTC");
         assert!(schedule.enabled());
+    }
+
+    #[test]
+    fn parses_disabled_schedule_without_cron() {
+        let workflow = WorkflowDefinition::from_yaml(
+            r#"
+name: manual-job
+schedule:
+  enabled: false
+"#,
+        )
+        .unwrap();
+        let schedule = workflow.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.cron(), None);
+        assert!(!schedule.enabled());
+    }
+
+    #[test]
+    fn parses_schedule_false_as_disabled() {
+        let workflow = WorkflowDefinition::from_yaml(
+            r#"
+name: manual-job
+schedule: false
+"#,
+        )
+        .unwrap();
+        let schedule = workflow.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.cron(), None);
+        assert!(!schedule.enabled());
+    }
+
+    #[test]
+    fn rejects_enabled_schedule_without_cron() {
+        let err = WorkflowDefinition::from_yaml(
+            r#"
+name: missing-cron
+schedule:
+  enabled: true
+"#,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("missing cron"));
     }
 
     #[test]
