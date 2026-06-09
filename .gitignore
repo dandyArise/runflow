@@ -14,3 +14,13 @@ flow.exe
 .env
 .env.*
 !.env.example
+
+# Keep project notes and agent drafts out of Git.
+*.md
+!README.md
+!LICENSE.md
+!NOTICE.md
+!CHANGE_DATE.md
+!COMMERCIAL_LICENSE.md
+!docs/*.md
+!docs/**/*.md
