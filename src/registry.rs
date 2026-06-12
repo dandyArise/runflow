@@ -791,6 +791,59 @@ steps:
         fs::remove_dir_all(root).ok();
     }
 
+    #[test]
+    fn exports_stable_agent_context() {
+        let root = temp_root("registry-agent-export");
+        write_ssl_plugin(&root, "0.1.0");
+        let plugins = scan_plugins(&root).unwrap();
+        let document = RegistryDocument {
+            schema_version: 1,
+            generated_at: DateTime::parse_from_rfc3339("2026-06-12T10:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            registry_hash: registry_hash(&plugins).unwrap(),
+            plugins,
+        };
+        let path = registry_path(&root);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, serde_json::to_vec_pretty(&document).unwrap()).unwrap();
+
+        let context = export_for_agent(&root).unwrap();
+        let snapshot = serde_json::to_string_pretty(&context).unwrap();
+
+        assert_eq!(
+            snapshot,
+            r#"{
+  "schema_version": 1,
+  "registry_hash": "sha256:2b72dfd34b9962ea3a96d1364ae89f1476e185cca310b22398cb72f8cbd35c05",
+  "generated_at": "2026-06-12T10:00:00Z",
+  "plugins": [
+    {
+      "name": "ssl_check",
+      "description": "Check SSL/TLS certificate expiration.",
+      "inputs": {
+        "host": "string",
+        "port": "integer"
+      },
+      "outputs": {
+        "status": "string"
+      },
+      "permissions": {
+        "network_required": true
+      }
+    }
+  ],
+  "rules": [
+    "Use only registered plugins.",
+    "Do not invent tools.",
+    "Return needs_tool if no plugin matches.",
+    "Do not execute shell directly."
+  ]
+}"#
+        );
+        fs::remove_dir_all(root).ok();
+    }
+
     fn temp_root(prefix: &str) -> PathBuf {
         std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()))
     }
