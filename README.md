@@ -359,6 +359,8 @@ steps:
     input: {}
 ```
 
+`flow validate` rejects plugin steps whose `plugin_id` is registered but whose command does not reference the registered `entrypoint`.
+
 See `docs/registry.md` for the development workflow and contract.
 
 ### Packages

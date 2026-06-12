@@ -155,6 +155,7 @@ Contraintes :
 
 - `type: plugin` est obligatoire.
 - `plugin_id` doit exister dans `.flow/registry/plugins.json`.
+- `run.command` ou `run.args` doit referencer l'`entrypoint` declare dans le registry.
 - `input` doit etre un objet.
 - les inputs requis doivent etre presents sauf si le manifest declare un `default`.
 - les inputs non declares sont invalides.
@@ -237,6 +238,7 @@ Verifications v1 :
 
 - plugin inconnu ;
 - registry manquant ;
+- entrypoint detourne ou absent ;
 - input requis absent ;
 - type d'input incorrect ;
 - input inconnu.

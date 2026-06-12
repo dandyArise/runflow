@@ -325,6 +325,7 @@ pub fn validate_workflow_plugins(
             continue;
         };
 
+        validate_step_entrypoint(index, step, plugin, &mut diagnostics);
         validate_step_input(index, step.input.as_ref(), plugin, &mut diagnostics);
     }
 
@@ -565,6 +566,50 @@ fn validate_step_input(
     }
 }
 
+fn validate_step_entrypoint(
+    step_index: usize,
+    step: &crate::dag::StepDefinition,
+    plugin: &RegistryPlugin,
+    diagnostics: &mut Vec<RegistryLintDiagnostic>,
+) {
+    let Some(run) = step.run.as_ref() else {
+        diagnostics.push(RegistryLintDiagnostic {
+            code: "entrypoint_mismatch".to_owned(),
+            message: format!(
+                "Plugin step must execute registered entrypoint {}.",
+                plugin.entrypoint
+            ),
+            field: format!("steps[{step_index}].run"),
+            suggestion: Some(format!("Reference {}", plugin.entrypoint)),
+        });
+        return;
+    };
+
+    let expected = normalize_registry_path(&plugin.entrypoint);
+    let command = normalize_registry_path(run.command());
+    let args = run
+        .args()
+        .iter()
+        .map(|arg| normalize_registry_path(arg))
+        .collect::<Vec<_>>();
+
+    if command != expected && !args.iter().any(|arg| arg == &expected) {
+        diagnostics.push(RegistryLintDiagnostic {
+            code: "entrypoint_mismatch".to_owned(),
+            message: format!(
+                "Plugin {} must execute registered entrypoint {}.",
+                plugin.name, plugin.entrypoint
+            ),
+            field: format!("steps[{step_index}].run"),
+            suggestion: Some(format!("Use entrypoint {}", plugin.entrypoint)),
+        });
+    }
+}
+
+fn normalize_registry_path(path: &str) -> String {
+    path.replace('\\', "/").trim_start_matches("./").to_owned()
+}
+
 pub fn invalid_payload(errors: Vec<RegistryLintDiagnostic>) -> Value {
     json!({
         "status": "invalid",
@@ -682,6 +727,66 @@ steps:
             diagnostics
                 .iter()
                 .any(|item| item.code == "invalid_input_type")
+        );
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn accepts_plugin_step_using_registered_entrypoint() {
+        let root = temp_root("registry-entrypoint-valid");
+        write_ssl_plugin(&root, "0.1.0");
+        write_registry(&root, scan_plugins(&root).unwrap()).unwrap();
+        let workflow = crate::dag::WorkflowDefinition::from_yaml(
+            r#"
+name: ssl-monitor
+steps:
+  - name: check
+    type: plugin
+    run:
+      command: python
+      args: ["plugins/ssl_check/check_ssl.py"]
+    plugin_id: ssl_check
+    input:
+      host: api.example.com
+      port: 443
+"#,
+        )
+        .unwrap();
+
+        let diagnostics = validate_workflow_plugins(&root, &workflow);
+
+        assert!(diagnostics.is_empty());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn rejects_plugin_step_using_wrong_entrypoint() {
+        let root = temp_root("registry-entrypoint-invalid");
+        write_ssl_plugin(&root, "0.1.0");
+        write_registry(&root, scan_plugins(&root).unwrap()).unwrap();
+        let workflow = crate::dag::WorkflowDefinition::from_yaml(
+            r#"
+name: ssl-monitor
+steps:
+  - name: check
+    type: plugin
+    run:
+      command: python
+      args: ["plugins/ssl_check/other.py"]
+    plugin_id: ssl_check
+    input:
+      host: api.example.com
+      port: 443
+"#,
+        )
+        .unwrap();
+
+        let diagnostics = validate_workflow_plugins(&root, &workflow);
+
+        assert!(
+            diagnostics
+                .iter()
+                .any(|item| item.code == "entrypoint_mismatch")
         );
         fs::remove_dir_all(root).ok();
     }
