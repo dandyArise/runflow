@@ -20,7 +20,7 @@ Ce fichier est une checklist de couverture pour la doc GitHub Pages (`docs/index
 12. Troubleshooting: common errors + where to look (`logs/`, `.flow/`)
 13. Release: tagging + artifacts
 14. Development: fmt/clippy/test/build
-15. Agent MVP spec: assist-only commands, schema validation, policy checks, audit trail
+15. External agent integration notes only; no Agent CLI is part of RunFlow core.
 
 Canonical source of truth for the CLI list: `src/cli.rs` enums (`Command`, `JobCommand`, `RunCommand`, etc.).
 
@@ -39,9 +39,9 @@ Canonical source of truth for the CLI list: `src/cli.rs` enums (`Command`, `JobC
 9. Plugins: manifest + schémas, règles d’exécution de `plugin test` (cwd/workspace/timeout/validation)
 10. Packages (`.flowpkg`): build/install, checksum, emplacement
 11. Rétention: dry-run/delete, keep-runs, older-than-days, ce qui est supprimé
-12. Spec Agent MVP: commandes assist-only, validation schéma, policy checks, audit trail
-13. Dépannage: erreurs typiques + où regarder (`logs/`, `.flow/`)
-14. Release: tags + artefacts
-15. Dev: fmt/clippy/test/build
+12. Dépannage: erreurs typiques + où regarder (`logs/`, `.flow/`)
+13. Release: tags + artefacts
+14. Dev: fmt/clippy/test/build
+15. Notes d'integration agent externe seulement; aucune CLI Agent dans le coeur RunFlow.
 
 Source de vérité pour la liste de commandes: `src/cli.rs`.

@@ -1,12 +1,13 @@
 # RunFlow Agent MVP Spec
 
-Status: draft
-Target branch: `agent/mvp-spec`
-Scope: Agent v1 assist-only
+Status: external project draft
+Target repository: `runflow-agent`
+RunFlow core status: frozen; no LLM or Agent CLI lives in this repository.
+Scope: Agent v1 assist-only, implemented outside `runflow`
 
 ## Decision
 
-RunFlow Agent v1 is an assistant, not an operator.
+RunFlow Agent v1 is a separate assistant project, not an operator built into RunFlow core.
 
 It can read RunFlow state, generate drafts, review workflows, explain runs, and produce reports. It must not execute, cancel, schedule, notify, edit secrets, call external APIs, or mutate project state without a future explicit feature.
 
@@ -17,7 +18,7 @@ It can read RunFlow state, generate drafts, review workflows, explain runs, and 
 - Explain why a run failed using events, manifests, step metadata, stdout, and stderr.
 - Produce local daily reports from structured RunFlow data.
 - Keep all agent output deterministic enough to validate before showing it.
-- Keep RunFlow usable without any model installed.
+- Keep RunFlow usable without any model installed and without any LLM dependency.
 
 ## Non-goals
 
@@ -28,7 +29,7 @@ It can read RunFlow state, generate drafts, review workflows, explain runs, and 
 - No secret management.
 - No automatic `job add`, `job run`, `run cancel`, webhook, email, or notification.
 - No fine-tuning work in v1.
-- No MCP server dependency for the embedded agent.
+- No MCP server dependency for the external agent.
 
 ## Safety Model
 
@@ -84,20 +85,20 @@ The agent may propose a command, but it must not run it.
 
 ## CLI Scope
 
-Add a new top-level command group:
+The CLI belongs to the future `runflow-agent` repository. Do not add this command group to `runflow` core.
 
 ```powershell
-flow agent <command>
+runflow-agent <command>
 ```
 
-### `flow agent draft`
+### `runflow-agent draft`
 
 Generate a workflow draft from a user request.
 
 ```powershell
-flow agent draft --prompt "Ping 1.1.1.1 every 5 minutes"
-flow agent draft --input .\request.txt
-flow agent draft --prompt "Backup logs" --output .\workflow.yml
+runflow-agent draft --prompt "Ping 1.1.1.1 every 5 minutes"
+runflow-agent draft --input .\request.txt
+runflow-agent draft --prompt "Backup logs" --output .\workflow.yml
 ```
 
 Behavior:
@@ -111,13 +112,13 @@ Behavior:
 
 Accepted workflow fields must match `src/schema_defs/v1/workflow.schema.json`.
 
-### `flow agent review`
+### `runflow-agent review`
 
 Review an existing workflow file.
 
 ```powershell
-flow agent review .\workflow.yml
-flow agent review .\workflow.yml --format json
+runflow-agent review .\workflow.yml
+runflow-agent review .\workflow.yml --format json
 ```
 
 Behavior:
@@ -127,13 +128,13 @@ Behavior:
 - detects risky patterns such as shell redirection, unbounded output, missing timeout, broad env usage, or suspicious commands;
 - suggests changes without editing the file.
 
-### `flow agent explain-run`
+### `runflow-agent explain-run`
 
 Explain a run from structured RunFlow data.
 
 ```powershell
-flow agent explain-run <run_id>
-flow agent explain-run <run_id> --format json
+runflow-agent explain-run <run_id>
+runflow-agent explain-run <run_id> --format json
 ```
 
 Inputs:
@@ -153,14 +154,14 @@ Behavior:
 - suggests manual next steps;
 - never retries or cancels anything.
 
-### `flow agent report daily`
+### `runflow-agent report daily`
 
 Generate a local daily report.
 
 ```powershell
-flow agent report daily
-flow agent report daily --from 2026-06-09T00:00:00Z --to 2026-06-10T00:00:00Z
-flow agent report daily --format json
+runflow-agent report daily
+runflow-agent report daily --from 2026-06-09T00:00:00Z --to 2026-06-10T00:00:00Z
+runflow-agent report daily --format json
 ```
 
 Inputs:
@@ -184,10 +185,10 @@ Agent output must be schema validated before display.
 Recommended schema files:
 
 ```text
-src/schema_defs/v1/agent-draft.schema.json
-src/schema_defs/v1/agent-review.schema.json
-src/schema_defs/v1/agent-explain-run.schema.json
-src/schema_defs/v1/agent-report.schema.json
+schemas/agent-draft.schema.json
+schemas/agent-review.schema.json
+schemas/agent-explain-run.schema.json
+schemas/agent-report.schema.json
 ```
 
 ### Draft Response
@@ -382,20 +383,19 @@ If later RunFlow gets global events, agent audit can move there.
 
 ## Internal Rust Structure
 
-Suggested files:
+Suggested files in `runflow-agent`:
 
 ```text
-src/agent/mod.rs
-src/agent/cli.rs
-src/agent/config.rs
-src/agent/context.rs
-src/agent/model.rs
-src/agent/output.rs
-src/agent/policy.rs
-src/agent/report.rs
-src/agent/review.rs
-src/agent/draft.rs
-src/agent/audit.rs
+src/cli.rs
+src/config.rs
+src/context.rs
+src/model.rs
+src/output.rs
+src/policy.rs
+src/report.rs
+src/review.rs
+src/draft.rs
+src/audit.rs
 ```
 
 Core types stay outside text CLI parsing. Agent code must call Rust modules directly.
@@ -414,16 +414,16 @@ Required behavior:
 - deterministic settings where possible;
 - low temperature for YAML/JSON generation.
 
-RunFlow must still build and run without Ollama installed.
+RunFlow core must still build and run without Ollama installed because Ollama belongs to `runflow-agent`.
 
 ## Acceptance Criteria
 
 V1 is done when:
 
-- `flow agent draft` generates schema-valid workflow YAML for simple requests;
-- `flow agent review` reports schema errors and risk findings without editing files;
-- `flow agent explain-run` explains a failed run from local logs/events;
-- `flow agent report daily` produces text and JSON summaries;
+- `runflow-agent draft` generates schema-valid workflow YAML for simple requests;
+- `runflow-agent review` reports schema errors and risk findings without editing files;
+- `runflow-agent explain-run` explains a failed run from local logs/events;
+- `runflow-agent report daily` produces text and JSON summaries;
 - all model outputs are JSON-schema validated;
 - generated workflows are validated by the existing workflow schema;
 - no agent command runs jobs, cancels runs, sends alerts, or calls external APIs;
@@ -432,7 +432,7 @@ V1 is done when:
 
 ## Implementation Plan
 
-1. Add agent CLI group and config parsing.
+1. Create the separate `runflow-agent` project with CLI and config parsing.
 2. Add model provider trait with Ollama implementation.
 3. Add output schemas and validation.
 4. Add workflow draft command.
@@ -440,11 +440,11 @@ V1 is done when:
 6. Add run explanation command.
 7. Add daily report command.
 8. Add audit JSONL.
-9. Add README and docs site sections after the feature is implemented.
+9. Add `runflow-agent` README sections after the feature is implemented.
 
 ## Open Questions
 
-- Should `flow agent draft --output` overwrite by default or require `--force`?
+- Should `runflow-agent draft --output` overwrite by default or require `--force`?
 - Should Ollama be the only v1 provider, or should a mock provider be available for tests and offline demos?
 - Should report generation use SQLite projections first, then fallback to event replay?
 - Should agent audit become a first-class global event type later?

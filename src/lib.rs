@@ -10,6 +10,7 @@ pub mod manifest;
 pub mod packages;
 pub mod plugins;
 pub mod projections;
+pub mod registry;
 pub mod retention;
 pub mod scheduler;
 pub mod schemas;
