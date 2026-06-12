@@ -20,6 +20,7 @@ use crate::packages::{
     build_package_from_workflow_file, read_package_or_legacy_workflow, write_package,
 };
 use crate::plugins::{PluginInput, PluginManifest, PluginRuntime, parse_manifest};
+use crate::registry::{self, RegistryDocument};
 use crate::retention::{RetentionPolicy, run_retention};
 use crate::scheduler::Scheduler;
 use crate::schemas;
@@ -77,6 +78,10 @@ enum Command {
     Retention {
         #[command(subcommand)]
         command: RetentionCommand,
+    },
+    Registry {
+        #[command(subcommand)]
+        command: RegistryCommand,
     },
     Schedule {
         #[command(subcommand)]
@@ -198,6 +203,41 @@ enum RetentionCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum RegistryCommand {
+    Scan {
+        #[arg(long)]
+        check: bool,
+    },
+    List {
+        #[command(subcommand)]
+        command: RegistryListCommand,
+    },
+    Inspect {
+        plugin_name: String,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    Export {
+        #[arg(long)]
+        for_agent: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum RegistryListCommand {
+    Plugins {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, ValueEnum)]
+enum OutputFormat {
+    Text,
+    Json,
+}
+
+#[derive(Debug, Subcommand)]
 enum ScheduleCommand {
     Next {
         expression: String,
@@ -225,14 +265,15 @@ impl Cli {
             Command::Plugin { command } => run_plugin_command(&root, command).await,
             Command::Package { command } => run_package_command(&root, command),
             Command::Test { job_name, verbose } => run_test_command(&root, &job_name, verbose),
-            Command::Validate { workflow } => validate_workflow(&workflow),
+            Command::Validate { workflow } => validate_workflow(&root, &workflow),
             Command::Migrate { workflow } => {
-                validate_workflow(&workflow)?;
+                validate_workflow(&root, &workflow)?;
                 println!("migration not required: {}", workflow.display());
                 Ok(())
             }
             Command::Daemon { command } => run_daemon_command(&root, command).await,
             Command::Retention { command } => run_retention_command(&root, command),
+            Command::Registry { command } => run_registry_command(&root, command),
             Command::Schedule { command } => run_schedule_command(command),
             Command::Version => {
                 println!("runflow {}", env!("CARGO_PKG_VERSION"));
@@ -1156,6 +1197,121 @@ fn run_retention_command(root: &Path, command: RetentionCommand) -> Result<()> {
     }
 }
 
+fn run_registry_command(root: &Path, command: RegistryCommand) -> Result<()> {
+    match command {
+        RegistryCommand::Scan { check } => {
+            let summary = if check {
+                registry::scan_check(root)?
+            } else {
+                registry::scan_and_write(root)?
+            };
+            println!("Scanned plugins: {}", summary.scanned_plugins);
+            println!("Valid plugins: {}", summary.valid_plugins);
+            println!("Invalid plugins: {}", summary.invalid_plugins);
+            if check {
+                println!("Registry up to date: {}", summary.registry_path.display());
+            } else {
+                println!("Registry written: {}", summary.registry_path.display());
+            }
+            Ok(())
+        }
+        RegistryCommand::List { command } => match command {
+            RegistryListCommand::Plugins { format } => {
+                let registry = registry::read_registry(root)?;
+                match format {
+                    OutputFormat::Text => print_registry_plugins(&registry),
+                    OutputFormat::Json => {
+                        println!("{}", serde_json::to_string_pretty(&registry.plugins)?);
+                        Ok(())
+                    }
+                }
+            }
+        },
+        RegistryCommand::Inspect {
+            plugin_name,
+            format,
+        } => {
+            let registry = registry::read_registry(root)?;
+            let plugin = registry
+                .plugins
+                .iter()
+                .find(|plugin| plugin.name == plugin_name)
+                .with_context(|| format!("plugin not found in registry: {plugin_name}"))?;
+            match format {
+                OutputFormat::Text => print_registry_plugin(plugin),
+                OutputFormat::Json => {
+                    println!("{}", serde_json::to_string_pretty(plugin)?);
+                    Ok(())
+                }
+            }
+        }
+        RegistryCommand::Export { for_agent } => {
+            if !for_agent {
+                bail!("registry export currently requires --for-agent");
+            }
+            let context = registry::export_for_agent(root)?;
+            println!("{}", serde_json::to_string_pretty(&context)?);
+            Ok(())
+        }
+    }
+}
+
+fn print_registry_plugins(registry: &RegistryDocument) -> Result<()> {
+    println!(
+        "{:<24} {:<10} {:<8} DESCRIPTION",
+        "NAME", "VERSION", "RUNTIME"
+    );
+    for plugin in &registry.plugins {
+        println!(
+            "{:<24} {:<10} {:<8} {}",
+            plugin.name,
+            plugin.version,
+            plugin.runtime.as_str(),
+            plugin.description
+        );
+    }
+    Ok(())
+}
+
+fn print_registry_plugin(plugin: &registry::RegistryPlugin) -> Result<()> {
+    println!("Plugin: {}", plugin.name);
+    println!("Version: {}", plugin.version);
+    println!("Runtime: {}", plugin.runtime.as_str());
+    println!("Entrypoint: {}", plugin.entrypoint);
+    println!();
+    println!("Inputs:");
+    for (name, field) in &plugin.inputs {
+        let detail = if field.required {
+            "required".to_owned()
+        } else if let Some(default) = &field.default {
+            format!("default={default}")
+        } else {
+            "optional".to_owned()
+        };
+        println!("  {:<18} {:<8} {}", name, field.field_type.as_str(), detail);
+    }
+    println!();
+    println!("Outputs:");
+    for (name, field) in &plugin.outputs {
+        if let Some(values) = &field.enum_values {
+            println!(
+                "  {:<18} {:<8} enum={}",
+                name,
+                field.field_type.as_str(),
+                serde_json::to_string(values)?
+            );
+        } else {
+            println!("  {:<18} {}", name, field.field_type.as_str());
+        }
+    }
+    println!();
+    println!("Permissions (declarative, not enforced in v1):");
+    for (name, value) in &plugin.permissions {
+        println!("  {name} = {}", serde_json::to_string(value)?);
+    }
+    Ok(())
+}
+
 fn run_schedule_command(command: ScheduleCommand) -> Result<()> {
     let (label, expression, count, from) = match command {
         ScheduleCommand::Next {
@@ -1200,12 +1356,20 @@ fn run_schedule_command(command: ScheduleCommand) -> Result<()> {
     Ok(())
 }
 
-fn validate_workflow(workflow: &Path) -> Result<()> {
+fn validate_workflow(root: &Path, workflow: &Path) -> Result<()> {
     let source = fs::read_to_string(workflow)
         .with_context(|| format!("failed to read workflow {}", workflow.display()))?;
     let diagnostics = schemas::validate_workflow_yaml(&source)?;
     if diagnostics.is_empty() {
-        WorkflowDefinition::from_yaml(&source)?;
+        let workflow_definition = WorkflowDefinition::from_yaml(&source)?;
+        let registry_diagnostics = registry::validate_workflow_plugins(root, &workflow_definition);
+        if !registry_diagnostics.is_empty() {
+            eprintln!(
+                "{}",
+                serde_json::to_string_pretty(&registry::invalid_payload(registry_diagnostics))?
+            );
+            bail!("invalid workflow: {}", workflow.display());
+        }
         println!("valid: {}", workflow.display());
         Ok(())
     } else {
@@ -1337,6 +1501,11 @@ mod tests {
             vec!["flow", "migrate", "workflow.yml"],
             vec!["flow", "daemon", "status"],
             vec!["flow", "retention", "run"],
+            vec!["flow", "registry", "scan"],
+            vec!["flow", "registry", "scan", "--check"],
+            vec!["flow", "registry", "list", "plugins"],
+            vec!["flow", "registry", "inspect", "ssl_check"],
+            vec!["flow", "registry", "export", "--for-agent"],
             vec!["flow", "schedule", "next", "0 */5 * * * * *"],
             vec!["flow", "schedule", "workflow", "workflow.yml"],
             vec!["flow", "version"],

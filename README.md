@@ -169,7 +169,7 @@ logs/
   <run_id>/<step_name>/step.metadata.json
 ```
 
-The `.flow/` directory is ignored by Git.
+The `.flow/` directory is ignored by Git except `.flow/registry/plugins.json`, which is generated and versioned as the local plugin contract.
 
 ## CLI Commands
 
@@ -331,6 +331,37 @@ Validate plugin output JSON, or execute a plugin command with a `PluginInput` sa
 flow plugin test "unused-command" .\plugin-output.json
 flow plugin test "powershell -NoProfile -File .\plugin.ps1" .\plugin-input.json
 ```
+
+### Registry
+
+The registry is the generated local plugin contract shared with validation, UI, MCP and `runflow-agent`.
+
+```powershell
+flow registry scan
+flow registry scan --check
+flow registry list plugins
+flow registry inspect <plugin_name>
+flow registry export --for-agent
+```
+
+V1 scans `plugins/*/plugin.yml` and writes `.flow/registry/plugins.json`. The file is generated, committed, and checked in CI with `flow registry scan --check`. Empty registries are valid and contain `plugins: []`.
+
+Plugin workflows keep the explicit syntax:
+
+```yaml
+steps:
+  - name: check
+    type: plugin
+    run:
+      command: python
+      args: ["plugins/my_plugin/run.py"]
+    plugin_id: my_plugin
+    input: {}
+```
+
+`flow validate` rejects plugin steps whose `plugin_id` is registered but whose command does not reference the registered `entrypoint`.
+
+See `docs/registry.md` for the development workflow and contract.
 
 ### Packages
 

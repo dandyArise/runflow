@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -85,6 +86,7 @@ pub struct StepDefinition {
     pub depends_on: Vec<String>,
     pub run: Option<RunDefinition>,
     pub plugin_id: Option<String>,
+    pub input: Option<Value>,
     pub duration: Option<String>,
     pub command: Option<String>,
     pub interval: Option<String>,

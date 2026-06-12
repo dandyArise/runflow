@@ -1,5 +1,7 @@
 /target/
-/.flow/
+/.flow/*
+!/.flow/registry/
+!/.flow/registry/plugins.json
 /logs/
 /.repolens/
 /flowrun-codex-ready/

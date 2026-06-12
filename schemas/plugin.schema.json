@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowrun.dev/schemas/v1/plugin.schema.json",
+  "title": "RunFlow Registry Plugin Manifest",
+  "type": "object",
+  "required": ["name", "version", "description", "runtime", "entrypoint"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*[a-z0-9]$" },
+    "version": { "type": "string" },
+    "description": { "type": "string", "minLength": 1 },
+    "runtime": { "type": "string", "enum": ["python", "node", "shell", "binary"] },
+    "entrypoint": { "type": "string", "minLength": 1 },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/field" }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/field" }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["string", "integer", "number", "boolean", "object", "array"] },
+        "required": { "type": "boolean", "default": false },
+        "default": true,
+        "enum": { "type": "array" }
+      }
+    }
+  }
+}
