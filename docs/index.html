@@ -502,7 +502,27 @@ h2 em { font-style: normal; color: var(--green); }
   margin-bottom: .6rem;
   padding-bottom: .5rem;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  user-select: none;
 }
+.cmd-group-title::after,
+.status-card h4::after {
+  content: "+";
+  color: var(--text-dim);
+  font-size: .9rem;
+  transition: transform .2s, color .2s;
+}
+.cmd-group:not(.collapsed) .cmd-group-title::after,
+.status-card:not(.collapsed) h4::after {
+  content: "-";
+  color: var(--green);
+}
+.cmd-group.collapsed .cmd-list,
+.status-card.collapsed .status-body { display: none; }
 .cmd-list { display: grid; gap: .5rem; }
 .cmd-row {
   background: var(--bg2);
@@ -589,6 +609,43 @@ h2 em { font-style: normal; color: var(--green); }
 .copy-btn:hover { border-color: var(--green); color: var(--green); }
 .copy-btn.copied { color: var(--green); border-color: var(--green); }
 
+/* ACCORDIONS */
+.guide-accordion {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg2);
+  margin: .8rem 0;
+  overflow: hidden;
+}
+.guide-accordion summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 1rem 1.2rem;
+  color: var(--text-bright);
+  font-family: var(--sans);
+  font-size: .95rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.guide-accordion summary::-webkit-details-marker { display: none; }
+.guide-accordion summary::after {
+  content: "+";
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: .9rem;
+}
+.guide-accordion[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.guide-accordion[open] summary::after {
+  content: "-";
+  color: var(--green);
+}
+.guide-content { padding: 1rem 1.2rem 1.2rem; }
+
 /* STATUS */
 .status-grid {
   display: grid;
@@ -607,6 +664,11 @@ h2 em { font-style: normal; color: var(--green); }
   color: var(--text-bright);
   margin-bottom: .9rem;
   letter-spacing: -.02em;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  user-select: none;
 }
 .status-item {
   display: flex; gap: .7rem; align-items: flex-start;
@@ -987,6 +1049,16 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       </div>
     </div>
     <div class="cmd-group">
+      <div class="cmd-group-title" data-fr="Registry" data-en="Registry">Registry</div>
+      <div class="cmd-list">
+        <div class="cmd-row"><span class="cmd-name">flow registry scan</span><span class="cmd-desc" data-fr="Scanne plugins/*/plugin.yml et génère .flow/registry/plugins.json" data-en="Scan plugins/*/plugin.yml and generate .flow/registry/plugins.json">Scanne les manifests locaux et génère plugins.json</span><span class="cmd-eg">flow registry scan</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow registry scan --check</span><span class="cmd-desc" data-fr="Vérifie que le registry versionné est à jour pour la CI" data-en="Check that the versioned registry is current for CI">Vérifie que le registry versionné est à jour</span><span class="cmd-eg">flow registry scan --check</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow registry list plugins</span><span class="cmd-desc" data-fr="Liste les plugins enregistrés dans le registry" data-en="List registered plugins from the registry">Liste les plugins enregistrés</span><span class="cmd-eg">flow registry list plugins</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow registry inspect</span><span class="cmd-desc" data-fr="Inspecte un plugin et ses permissions déclaratives" data-en="Inspect a plugin and its declarative permissions">Inspecte un plugin enregistré</span><span class="cmd-eg">flow registry inspect ssl_check</span></div>
+        <div class="cmd-row"><span class="cmd-name">flow registry export</span><span class="cmd-desc" data-fr="Exporte un contexte compact pour intégrations externes" data-en="Export compact context for external integrations">Exporte le contexte compact pour intégrations externes</span><span class="cmd-eg">flow registry export --for-agent</span></div>
+      </div>
+    </div>
+    <div class="cmd-group">
       <div class="cmd-group-title" data-fr="Daemon" data-en="Daemon">Daemon</div>
       <div class="cmd-list">
         <div class="cmd-row"><span class="cmd-name">flow daemon start</span><span class="cmd-desc" data-fr="Démarre le daemon et enqueue les jobs schedulés" data-en="Start the daemon and enqueue scheduled jobs">Démarre le daemon et enqueue les jobs schedulés</span><span class="cmd-eg">flow daemon start</span></div>
@@ -1050,6 +1122,9 @@ footer p { font-size: .77rem; color: var(--text-dim); }
   <h2 data-fr="Exemples <em>pas à pas.</em>" data-en="Step-by-step <em>examples.</em>">Exemples <em>pas à pas.</em></h2>
 
   <div class="reveal">
+    <details class="guide-accordion" open>
+      <summary data-fr="Workflow ping local" data-en="Local ping workflow">Workflow ping local</summary>
+      <div class="guide-content">
     <p class="s-desc" data-fr="Objectif : lancer un ping vers 1.1.1.1 et récupérer stdout/stderr et les métadonnées du step via RunFlow." data-en="Goal: run a ping to 1.1.1.1 and read stdout/stderr plus step metadata using RunFlow.">Objectif : lancer un ping vers 1.1.1.1 et récupérer stdout/stderr et les métadonnées du step via RunFlow.</p>
 
     <div class="code-block"><code># workflow.yml</code><button class="copy-btn" onclick="copyCode(this,'# workflow.yml')">COPY</button></div>
@@ -1070,8 +1145,12 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <p style="margin-top:1rem;font-size:.78rem;color:var(--text-dim)" data-fr="Les fichiers sont aussi disponibles directement dans logs/ et .flow/." data-en="Files are also available directly under logs/ and .flow/.">Les fichiers sont aussi disponibles directement dans <code style="color:var(--green)">logs/</code> et <code style="color:var(--green)">.flow/</code>.</p>
     <div class="code-block"><code>Get-Content ".\logs\$runId\ping_1111\stdout.log"</code><button class="copy-btn" onclick="copyCode(this,'Get-Content \".\\\\logs\\\\$runId\\\\ping_1111\\\\stdout.log\"')">COPY</button></div>
     <div class="code-block"><code>Get-Content ".\logs\$runId\ping_1111\step.metadata.json"</code><button class="copy-btn" onclick="copyCode(this,'Get-Content \".\\\\logs\\\\$runId\\\\ping_1111\\\\step.metadata.json\"')">COPY</button></div>
+      </div>
+    </details>
 
-    <div style="height:32px"></div>
+    <details class="guide-accordion">
+      <summary data-fr="Schedules et preview" data-en="Schedules and preview">Schedules et preview</summary>
+      <div class="guide-content">
     <p class="s-desc" data-fr="Le bloc schedule du workflow configure l'exécution automatique par le daemon. Les commandes flow schedule servent seulement à prévisualiser les prochaines dates." data-en="The workflow schedule block configures automatic daemon execution. The flow schedule commands are preview-only helpers.">Le bloc schedule du workflow configure l'exécution automatique par le daemon. Les commandes flow schedule servent seulement à prévisualiser les prochaines dates.</p>
     <div class="code-block"><code>schedule:<br>  cron: "0 */5 * * * * *"<br>  timezone: Europe/Paris<br>  enabled: true</code><button class="copy-btn" onclick="copyCode(this,'schedule:\\r\\n  cron: \"0 */5 * * * * *\"\\r\\n  timezone: Europe/Paris\\r\\n  enabled: true')">COPY</button></div>
     <p style="margin-top:.8rem;font-size:.78rem;color:var(--text-dim)" data-fr="Format cron : sec min hour day-of-month month day-of-week year. Sans schedule, ou avec schedule: false / enabled: false, le job reste exécutable manuellement mais le daemon ne le planifie pas." data-en="Cron format: sec min hour day-of-month month day-of-week year. Without schedule, or with schedule: false / enabled: false, the job stays manually runnable but the daemon does not schedule it.">Format cron : <code style="color:var(--green)">sec min hour day-of-month month day-of-week year</code>. Sans schedule, ou avec <code style="color:var(--green)">schedule: false</code> / <code style="color:var(--green)">enabled: false</code>, le job reste exécutable manuellement mais le daemon ne le planifie pas.</p>
@@ -1081,6 +1160,8 @@ footer p { font-size: .77rem; color: var(--text-dim); }
     <div class="code-block"><code>flow schedule next "0 */5 * * * * *" --from 2026-05-31T14:00:00Z --count 3</code><button class="copy-btn" onclick="copyCode(this,'flow schedule next \"0 */5 * * * * *\" --from 2026-05-31T14:00:00Z --count 3')">COPY</button></div>
     <div class="code-block"><code>flow schedule workflow .\workflow.yml</code><button class="copy-btn" onclick="copyCode(this,'flow schedule workflow .\\\\workflow.yml')">COPY</button></div>
     <p style="margin-top:.8rem;font-size:.78rem;color:var(--text-dim)" data-fr="Exemples : 0 0 * * * * * = toutes les heures, 0 */10 * * * * * = toutes les 10 minutes, 0 30 9 * * Mon * = chaque lundi à 09:30 UTC." data-en="Examples: 0 0 * * * * * = every hour, 0 */10 * * * * * = every 10 minutes, 0 30 9 * * Mon * = every Monday at 09:30 UTC.">Exemples : <code style="color:var(--green)">0 0 * * * * *</code> = toutes les heures, <code style="color:var(--green)">0 */10 * * * * *</code> = toutes les 10 minutes, <code style="color:var(--green)">0 30 9 * * Mon *</code> = chaque lundi à 09:30 UTC.</p>
+      </div>
+    </details>
   </div>
 </section>
 
@@ -1107,6 +1188,7 @@ footer p { font-size: .77rem; color: var(--text-dim); }
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Daemon long-running avec queue, statut et schedules cron" data-en="Long-running daemon with queue, status, and cron schedules">Daemon long-running avec queue, statut et schedules cron</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Cancel réel avec kill du process tree" data-en="Real cancel with process-tree kill">Cancel réel avec kill du process tree</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Plugin test avec workspace isolé" data-en="Plugin test with isolated workspace">Plugin test avec workspace isolé</span></div>
+      <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Registry local versionné avec scan --check" data-en="Versioned local registry with scan --check">Registry local versionné avec scan --check</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Preview cron avec flow schedule next" data-en="Cron preview with flow schedule next">Preview cron avec flow schedule next</span></div>
       <div class="status-item"><span class="si-dot ok"></span><span class="si-text ok" data-fr="Release Windows automatique sur tag" data-en="Automatic Windows release on tag">Release Windows automatique sur tag</span></div>
     </div>
@@ -1149,6 +1231,51 @@ function toggleLang() {
   applyLang();
 }
 
+function setupAccordions() {
+  document.querySelectorAll('.cmd-group').forEach((group, index) => {
+    const title = group.querySelector('.cmd-group-title');
+    if (!title) return;
+    group.classList.toggle('collapsed', index !== 0);
+    title.setAttribute('role', 'button');
+    title.setAttribute('tabindex', '0');
+    title.setAttribute('aria-expanded', index === 0 ? 'true' : 'false');
+    const toggle = () => {
+      const collapsed = group.classList.toggle('collapsed');
+      title.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    };
+    title.addEventListener('click', toggle);
+    title.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggle();
+    });
+  });
+
+  document.querySelectorAll('.status-card').forEach((card, index) => {
+    const title = card.querySelector('h4');
+    const items = Array.from(card.querySelectorAll('.status-item'));
+    if (!title || items.length === 0) return;
+    const body = document.createElement('div');
+    body.className = 'status-body';
+    card.insertBefore(body, items[0]);
+    items.forEach(item => body.appendChild(item));
+    card.classList.toggle('collapsed', index !== 0);
+    title.setAttribute('role', 'button');
+    title.setAttribute('tabindex', '0');
+    title.setAttribute('aria-expanded', index === 0 ? 'true' : 'false');
+    const toggle = () => {
+      const collapsed = card.classList.toggle('collapsed');
+      title.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    };
+    title.addEventListener('click', toggle);
+    title.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggle();
+    });
+  });
+}
+
 function showTab(id, btn) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1166,6 +1293,7 @@ function copyCode(btn, text) {
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.08 });
+setupAccordions();
 applyLang();
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 </script>
